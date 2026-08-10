@@ -1,5 +1,10 @@
+// Set VITE_API_BASE_URL at build time to point the app at a different API host
+// (e.g. in production). Empty default keeps same-origin/relative requests, which
+// the dev server proxy handles.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+
 async function request(path, { method = 'GET', body } = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
