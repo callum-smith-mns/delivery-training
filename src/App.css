@@ -1,0 +1,534 @@
+.game-screen {
+  min-height: 100svh;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 14px;
+  padding: 18px;
+  box-sizing: border-box;
+  overflow-x: clip;
+  background:
+    radial-gradient(circle at 8% 16%, #ffd38f 0%, #ffd38f33 26%, transparent 46%),
+    radial-gradient(circle at 84% 10%, #7fd2ff 0%, #7fd2ff29 23%, transparent 43%),
+    linear-gradient(180deg, #ffefcf 0%, #ffd690 50%, #f3af6f 100%);
+}
+
+.game-header {
+  text-align: left;
+}
+
+.game-header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  color: #5a1f00;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.game-header p {
+  margin: 8px 0 0;
+  color: #6a3310;
+  font-size: 1rem;
+}
+
+.setup-panel {
+  border: 4px solid #5f3a12;
+  background: #ffe7bf;
+  box-shadow: inset 0 -6px #e5be80;
+  padding: 14px;
+  text-align: left;
+}
+
+.setup-panel h2 {
+  margin: 0 0 6px;
+  color: #532800;
+  text-transform: uppercase;
+  font-size: 1.15rem;
+}
+
+.setup-panel label {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 6px;
+  color: #4b2b06;
+  font-weight: 700;
+}
+
+.setup-input {
+  width: min(420px, 100%);
+  box-sizing: border-box;
+  height: 44px;
+  border: 3px solid #4f3f1f;
+  background: #fff5dc;
+  color: #3d2200;
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.required-mark {
+  color: #a4231c;
+}
+
+.setup-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+@media (max-width: 560px) {
+  .setup-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+.setup-option {
+  display: flex;
+  flex-direction: column;
+  border: 3px solid #5f3a12;
+  background: #fff5dc;
+  box-shadow: inset 0 -5px #eccd9a;
+  padding: 12px;
+}
+
+.setup-option h3 {
+  margin: 0 0 4px;
+  color: #532800;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+}
+
+.setup-option .setup-input {
+  width: 100%;
+}
+
+.setup-button {
+  box-sizing: border-box;
+  height: 44px;
+  margin-top: auto;
+  font-size: 0.95rem;
+  border: 3px solid #1d5232;
+  background: #5de39e;
+  color: #143b24;
+  padding: 0 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.setup-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.setup-actions {
+  margin-bottom: 10px;
+}
+
+.setup-panel select {
+  border: 3px solid #4f3f1f;
+  background: #fff5dc;
+  color: #3d2200;
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 6px 8px;
+}
+
+.setup-caption {
+  margin: 10px 0 6px;
+  color: #5b3209;
+  font-size: 0.82rem;
+}
+
+.setup-distribution {
+  margin: 0;
+  padding-left: 18px;
+  color: #4b2b06;
+}
+
+.start-button {
+  margin-top: 12px;
+  font-size: 0.95rem;
+  border: 3px solid #1d5232;
+  background: #5de39e;
+  color: #143b24;
+  padding: 6px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.score-board {
+  border: 4px solid #5f3a12;
+  background: #ffe7bf;
+  box-shadow: inset 0 -6px #e5be80;
+  padding: 12px;
+  text-align: left;
+}
+
+.score-board h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  text-transform: uppercase;
+  color: #532800;
+}
+
+.score-total {
+  margin: 6px 0;
+  font-size: 1.1rem;
+  color: #3d2200;
+  font-weight: 700;
+}
+
+.score-log {
+  margin: 0;
+  padding-left: 18px;
+  max-height: 132px;
+  overflow: auto;
+  color: #4b2b06;
+  font-size: 0.9rem;
+}
+
+.train-yard {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  gap: 24px;
+}
+
+.yard-waiting,
+.rail-waiting {
+  border: 4px solid #4f3f1f;
+  background: #ffe7bf;
+  box-shadow: inset 0 -6px #e5be80;
+  color: #4b2b06;
+  text-transform: uppercase;
+  font-weight: 700;
+  text-align: center;
+  padding: 14px 12px;
+}
+
+/* An empty rail for a line this player has already shipped. It reserves the
+   same vertical space as the waiting box so the track below stays aligned. */
+.rail-empty {
+  min-height: 74px;
+}
+
+.train-line {
+  width: 100%;
+  margin-top: auto;
+}
+
+.train-consist {
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 10px;
+  width: fit-content;
+  margin: 0 auto 8px;
+  transition: transform 1.2s ease-in;
+}
+
+.train-consist.arriving {
+  animation: arriveFromLeft 900ms ease-out both;
+}
+
+@keyframes arriveFromLeft {
+  from {
+    transform: translateX(-140vw);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.train-consist.departing {
+  transform: translateX(140vw);
+}
+
+/* Use a keyframe animation (not a transition) so the slide-out reliably plays:
+   the arriving animation's `both` fill keeps transform applied and would
+   otherwise suppress a transition when the class flips to departed. */
+.train-consist.departed {
+  animation: departToRight 1.2s ease-in both;
+  pointer-events: none;
+}
+
+@keyframes departToRight {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(140vw);
+  }
+}
+
+.track {
+  width: 100%;
+  height: 18px;
+  border-top: 4px solid #422d14;
+  border-bottom: 4px solid #422d14;
+  background: repeating-linear-gradient(
+    90deg,
+    #422d14 0,
+    #422d14 5px,
+    #c9b28d 5px,
+    #c9b28d 24px
+  );
+}
+
+.locomotive-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.line-owner {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #1d2f40;
+  text-align: center;
+  min-height: 20px;
+}
+
+.locomotive {
+  width: 96px;
+  height: 62px;
+  background: linear-gradient(180deg, #348cc5 0%, #245f88 100%);
+  border: 4px solid #163b55;
+  position: relative;
+}
+
+.chimney {
+  position: absolute;
+  width: 18px;
+  height: 22px;
+  background: #0f2e43;
+  top: -20px;
+  left: 10px;
+}
+
+.wheel {
+  position: absolute;
+  bottom: -12px;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  background: #222;
+  border: 2px solid #6c6c6c;
+}
+
+.locomotive .wheel:first-of-type,
+.carriage .wheel:first-of-type {
+  left: 12px;
+}
+
+.locomotive .wheel:last-of-type,
+.carriage .wheel:last-of-type {
+  right: 12px;
+}
+
+.ship-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  font-size: 0.82rem;
+  border: 3px solid #1d5232;
+  background: #5de39e;
+  color: #143b24;
+  padding: 4px 10px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ship-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.carriage {
+  width: 76px;
+  min-height: 74px;
+  border: 4px solid #4f3f1f;
+  background: #f9d37f;
+  position: relative;
+  padding: 4px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: 4px;
+}
+
+.carriage.can-drop {
+  outline: 3px dashed #266347;
+  outline-offset: 3px;
+}
+
+.carriage.full {
+  opacity: 0.92;
+}
+
+.carriage-art {
+  height: 10px;
+}
+
+.carriage-progress {
+  font-weight: 700;
+  color: #442800;
+  font-size: 0.85rem;
+}
+
+.carriage-remaining {
+  margin: 0;
+  font-size: 0.68rem;
+  color: #613f18;
+}
+
+.carriage-note {
+  margin: 0;
+  font-size: 0.62rem;
+  color: #704f2a;
+}
+
+.carriage-cargo {
+  display: flex;
+  gap: 2px;
+  min-height: 12px;
+}
+
+.cargo-block {
+  width: 10px;
+  height: 10px;
+  background: #8d4f16;
+  border: 1px solid #4a2406;
+}
+
+.platform {
+  border: 4px solid #3f3e37;
+  background: linear-gradient(180deg, #77756b 0%, #504f48 100%);
+  box-shadow: inset 0 6px #8f8d82;
+  padding: 14px;
+}
+
+.platform-header h2 {
+  color: #fff5dc;
+  margin: 0;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+}
+
+.platform-header p {
+  margin: 4px 0 10px;
+  color: #efe2c3;
+  font-size: 0.85rem;
+}
+
+.parcel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 10px;
+}
+
+.parcel-slot {
+  min-height: 54px;
+}
+
+.parcel-slot-empty {
+  opacity: 0.75;
+}
+
+.parcel-line-label {
+  margin: 0 0 4px;
+  color: #f5e5c5;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.parcel {
+  width: 100%;
+  height: 54px;
+  min-height: 54px;
+  border: 3px solid #4a2f0f;
+  background: linear-gradient(180deg, #d08232 0%, #9f5f22 100%);
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  color: #fef4e3;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.parcel-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.parcel-dragging {
+  opacity: 0.4;
+  outline: 3px dashed #2f6f4f;
+}
+
+.parcel-overlay {
+  cursor: grabbing;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+  transform: scale(1.05);
+  z-index: 1000;
+}
+
+.carriage.drop-target {
+  outline: 3px solid #2f6f4f;
+  outline-offset: 3px;
+}
+
+.parcel:active {
+  cursor: grabbing;
+}
+
+.parcel-placeholder {
+  background: repeating-linear-gradient(
+    135deg,
+    #8f7a5d,
+    #8f7a5d 6px,
+    #786347 6px,
+    #786347 12px
+  );
+  border-color: #5d4a31;
+  cursor: default;
+}
+
+.error-message {
+  margin: 10px 0 0;
+  color: #7e1700;
+  font-weight: 700;
+}
+
+.parcel-knot {
+  width: 14px;
+  height: 4px;
+  background: #e7c68a;
+}
+
+@media (max-width: 900px) {
+  .game-screen {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .train-consist {
+    gap: 7px;
+  }
+
+  .carriage {
+    width: 66px;
+  }
+
+  .locomotive {
+    width: 82px;
+  }
+}

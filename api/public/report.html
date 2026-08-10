@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Delivery Rails · Team Stats</title>
+    <style>
+      :root {
+        --ink: #2d1600;
+        --title: #5a1f00;
+        --muted: #6a3310;
+        --label: #4b2b06;
+        --panel-bg: #ffe7bf;
+        --panel-border: #5f3a12;
+        --panel-shadow: #e5be80;
+        --accent-red: #a4231c;
+        --accent-green-bg: #5de39e;
+        --accent-green-border: #1d5232;
+        --accent-green-ink: #143b24;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: 'Courier New', 'Lucida Console', monospace;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 8% 16%, #ffd38f 0%, #ffd38f33 26%, transparent 46%),
+          radial-gradient(circle at 84% 10%, #7fd2ff 0%, #7fd2ff29 23%, transparent 43%),
+          linear-gradient(180deg, #ffefcf 0%, #ffd690 50%, #f3af6f 100%);
+        background-attachment: fixed;
+        padding: 24px 24px 48px;
+      }
+
+      .report {
+        max-width: 1100px;
+        margin: 0 auto;
+        display: grid;
+        gap: 22px;
+      }
+
+      .report-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .report-header h1 {
+        margin: 0;
+        font-size: clamp(1.8rem, 4vw, 2.8rem);
+        color: var(--title);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .report-header p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+
+      .refresh-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .filter-label {
+        color: var(--label);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+      }
+
+      .team-filter {
+        height: 44px;
+        min-width: 220px;
+        border: 3px solid #4f3f1f;
+        background: #fff5dc;
+        color: #3d2200;
+        font-family: inherit;
+        font-size: 0.9rem;
+        padding: 0 8px;
+      }
+
+      .refresh-button {
+        height: 44px;
+        padding: 0 18px;
+        border: 3px solid var(--accent-green-border);
+        background: var(--accent-green-bg);
+        color: var(--accent-green-ink);
+        font-family: inherit;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        box-shadow: inset 0 -5px #37b978;
+      }
+
+      .refresh-button:active {
+        transform: translateY(2px);
+        box-shadow: inset 0 -2px #37b978;
+      }
+
+      .refresh-button:disabled {
+        opacity: 0.6;
+        cursor: progress;
+      }
+
+      .updated-at {
+        color: var(--label);
+        font-size: 0.85rem;
+      }
+
+      .panel {
+        border: 4px solid var(--panel-border);
+        background: var(--panel-bg);
+        box-shadow: inset 0 -6px var(--panel-shadow);
+        padding: 16px 16px 24px;
+        margin-bottom: 4px;
+      }
+
+      .panel h2 {
+        margin: 0 0 4px;
+        color: var(--title);
+        text-transform: uppercase;
+        font-size: 1.2rem;
+      }
+
+      .panel h3 {
+        margin: 18px 0 8px;
+        color: #532800;
+        text-transform: uppercase;
+        font-size: 1rem;
+      }
+
+      .panel .caption {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+        margin: 8px 0 4px;
+      }
+
+      th,
+      td {
+        border: 2px solid #c79a5c;
+        padding: 6px 8px;
+        text-align: right;
+      }
+
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+
+      thead th {
+        background: #f6d6a2;
+        color: var(--label);
+        text-transform: uppercase;
+        font-size: 0.75rem;
+      }
+
+      tr.summary-row td {
+        background: #fff2d8;
+        font-weight: 700;
+        color: var(--title);
+      }
+
+      tr.stddev-row td {
+        background: #fbe4e2;
+        color: var(--accent-red);
+      }
+
+      .group {
+        margin-top: 10px;
+        margin-bottom: 22px;
+        padding-top: 6px;
+        border-top: 3px dashed #c79a5c;
+      }
+
+      .group:last-child {
+        margin-bottom: 0;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 6px 0 10px;
+        font-size: 0.8rem;
+        color: var(--label);
+      }
+
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .legend i {
+        width: 14px;
+        height: 14px;
+        border-radius: 2px;
+        display: inline-block;
+      }
+
+      .chart-wrap {
+        overflow-x: auto;
+        margin-bottom: 12px;
+      }
+
+      .chart-title {
+        margin: 14px 0 6px;
+        color: #532800;
+        font-weight: 700;
+        font-size: 0.9rem;
+      }
+
+      svg {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+
+      .status {
+        color: var(--muted);
+      }
+
+      .status.error {
+        color: var(--accent-red);
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="report">
+      <header class="report-header">
+        <div>
+          <h1>Delivery Rails · Team Stats</h1>
+          <p>Live analysis of every team's relay performance.</p>
+        </div>
+        <div class="refresh-row">
+          <label id="team-filter-label" class="filter-label" for="team-filter">Team</label>
+          <select id="team-filter" class="team-filter" aria-label="Filter by team name or code"></select>
+          <span id="updated-at" class="updated-at"></span>
+          <button id="refresh" class="refresh-button" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <p id="status" class="status">Loading team data…</p>
+      <div id="content"></div>
+    </div>
+
+    <script>
+      const PALETTE = ['#5a1f00', '#2b7fb8', '#c8641e', '#4f8a3a', '#a4231c', '#7a5cb0', '#0f7d84']
+
+      const contentEl = document.getElementById('content')
+      const statusEl = document.getElementById('status')
+      const updatedEl = document.getElementById('updated-at')
+      const refreshBtn = document.getElementById('refresh')
+      const teamFilterEl = document.getElementById('team-filter')
+      const teamFilterLabelEl = document.getElementById('team-filter-label')
+
+      let analyzedTeams = []
+      let selectedCode = null
+
+      refreshBtn.addEventListener('click', load)
+      teamFilterEl.addEventListener('change', () => {
+        selectedCode = teamFilterEl.value
+        renderSelectedTeam()
+      })
+      load()
+
+      async function load() {
+        refreshBtn.disabled = true
+        statusEl.className = 'status'
+        statusEl.textContent = 'Loading team data…'
+        try {
+          const response = await fetch('/api/data', { cache: 'no-store' })
+          if (!response.ok) {
+            throw new Error('Server responded with ' + response.status)
+          }
+          const data = await response.json()
+          applyData(data)
+          updatedEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString()
+        } catch (error) {
+          contentEl.innerHTML = ''
+          statusEl.className = 'status error'
+          statusEl.textContent = 'Could not load data: ' + error.message
+        } finally {
+          refreshBtn.disabled = false
+        }
+      }
+
+      // ---- Analysis -------------------------------------------------------
+
+      function completedGamesForTeam(team) {
+        const archived = Array.isArray(team.games) ? team.games : []
+        const currentCompleted =
+          team.game && (team.status === 'completed' || team.game.completedAt)
+            ? [team.game]
+            : []
+        return [...archived, ...currentCompleted].filter(
+          (game) => Array.isArray(game.scoreEvents) && game.scoreEvents.length > 0,
+        )
+      }
+
+      function secondsBetween(start, end) {
+        return Math.max(0, Math.round((new Date(end) - new Date(start)) / 1000))
+      }
+
+      // For each game, a "delivery to the customer" happens when the LAST member of
+      // the relay ships a line (the final ship for that line). We derive the final
+      // ship per line as the latest scoreEvent for that line.
+      function analyzeGame(game) {
+        const events = [...game.scoreEvents].sort(
+          (a, b) => new Date(a.playedAt) - new Date(b.playedAt),
+        )
+        const lineIds = [...new Set(events.map((event) => event.lineId))]
+        const playerIds = [...new Set(events.map((event) => event.playerId))]
+
+        const deliveries = lineIds
+          .map((lineId) => {
+            const lineEvents = events.filter((event) => event.lineId === lineId)
+            const last = lineEvents[lineEvents.length - 1]
+            const seconds =
+              typeof last.elapsedSeconds === 'number'
+                ? last.elapsedSeconds
+                : secondsBetween(game.startedAt, last.playedAt)
+            return { lineId, seconds, parcels: last.parcelsShipped ?? 0 }
+          })
+          .sort((a, b) => a.seconds - b.seconds)
+
+        let cumulative = 0
+        const timeline = deliveries.map((delivery) => {
+          cumulative += delivery.parcels
+          return { seconds: delivery.seconds, cumulativeParcels: cumulative }
+        })
+
+        const deliverySeconds = deliveries.map((delivery) => delivery.seconds)
+
+        // Trace parcels flowing member -> member -> customer. Each line is shipped
+        // once per relay member; the k-th ship of a line is relay position k, so
+        // memberFlows[position] is the cumulative parcels passed on at that stage.
+        const eventsByLine = new Map()
+        for (const event of events) {
+          if (!eventsByLine.has(event.lineId)) {
+            eventsByLine.set(event.lineId, [])
+          }
+          eventsByLine.get(event.lineId).push(event)
+        }
+        const positionCount = Math.max(
+          0,
+          ...[...eventsByLine.values()].map((list) => list.length),
+        )
+        const memberFlows = []
+        for (let position = 0; position < positionCount; position += 1) {
+          const handoffs = []
+          for (const list of eventsByLine.values()) {
+            const event = list[position]
+            if (!event) continue
+            const seconds =
+              typeof event.elapsedSeconds === 'number'
+                ? event.elapsedSeconds
+                : secondsBetween(game.startedAt, event.playedAt)
+            handoffs.push({ seconds, parcels: event.parcelsShipped ?? 0, playerName: event.playerName })
+          }
+          handoffs.sort((a, b) => a.seconds - b.seconds)
+          let running = 0
+          const points = handoffs.map((handoff) => {
+            running += handoff.parcels
+            return { seconds: handoff.seconds, cumulativeParcels: running }
+          })
+          memberFlows.push({ position, points, playerName: handoffs[0] ? handoffs[0].playerName : null })
+        }
+
+        return {
+          gameNumber: game.gameNumber ?? null,
+          lineCount: lineIds.length,
+          playerCount: playerIds.length,
+          firstDelivery: Math.min(...deliverySeconds),
+          completion: Math.max(...deliverySeconds),
+          deliveries,
+          timeline,
+          memberFlows,
+        }
+      }
+
+      function mean(values) {
+        if (values.length === 0) return 0
+        return values.reduce((sum, value) => sum + value, 0) / values.length
+      }
+
+      // Sample standard deviation (n - 1) to describe repeatability across repeats.
+      function stddev(values) {
+        if (values.length < 2) return 0
+        const m = mean(values)
+        const variance =
+          values.reduce((sum, value) => sum + (value - m) ** 2, 0) / (values.length - 1)
+        return Math.sqrt(variance)
+      }
+
+      function analyze(data) {
+        const teams = data && data.teams ? Object.values(data.teams) : []
+        return teams
+          .map((team) => {
+            const games = completedGamesForTeam(team).map(analyzeGame)
+            const byLineCount = new Map()
+            for (const game of games) {
+              if (!byLineCount.has(game.lineCount)) {
+                byLineCount.set(game.lineCount, [])
+              }
+              byLineCount.get(game.lineCount).push(game)
+            }
+
+            const groups = [...byLineCount.entries()]
+              .sort((a, b) => a[0] - b[0])
+              .map(([lineCount, groupGames]) => {
+                const firstValues = groupGames.map((game) => game.firstDelivery)
+                const completionValues = groupGames.map((game) => game.completion)
+
+                // Averaged delivery timeline, aligned by delivery index (same
+                // line count => same number of deliveries per game).
+                const timeline = []
+                for (let index = 0; index < lineCount; index += 1) {
+                  const secondsAtIndex = groupGames.map(
+                    (game) => game.deliveries[index].seconds,
+                  )
+                  const cumulativeAtIndex = groupGames.map(
+                    (game) => game.timeline[index].cumulativeParcels,
+                  )
+                  timeline.push({
+                    index: index + 1,
+                    seconds: mean(secondsAtIndex),
+                    secondsStddev: stddev(secondsAtIndex),
+                    cumulativeParcels: mean(cumulativeAtIndex),
+                  })
+                }
+
+                // Averaged flow per relay position (member 1 -> ... -> customer).
+                const memberCount = Math.max(
+                  0,
+                  ...groupGames.map((game) => game.memberFlows.length),
+                )
+                const flow = []
+                for (let position = 0; position < memberCount; position += 1) {
+                  const gamesAtPosition = groupGames
+                    .map((game) => game.memberFlows[position])
+                    .filter(Boolean)
+                  if (gamesAtPosition.length === 0) continue
+
+                  const points = []
+                  for (let index = 0; index < lineCount; index += 1) {
+                    const secondsAtIndex = gamesAtPosition
+                      .map((member) => member.points[index] && member.points[index].seconds)
+                      .filter((value) => value != null)
+                    const cumulativeAtIndex = gamesAtPosition
+                      .map((member) => member.points[index] && member.points[index].cumulativeParcels)
+                      .filter((value) => value != null)
+                    if (secondsAtIndex.length === 0) continue
+                    points.push({
+                      seconds: mean(secondsAtIndex),
+                      secondsStddev: stddev(secondsAtIndex),
+                      cumulativeParcels: mean(cumulativeAtIndex),
+                    })
+                  }
+
+                  flow.push({
+                    position,
+                    playerName: gamesAtPosition[0].playerName,
+                    isFinal: position === memberCount - 1,
+                    points,
+                  })
+                }
+
+                return {
+                  lineCount,
+                  games: groupGames,
+                  firstMean: mean(firstValues),
+                  firstStddev: stddev(firstValues),
+                  completionMean: mean(completionValues),
+                  completionStddev: stddev(completionValues),
+                  timeline,
+                  flow,
+                  memberCount,
+                }
+              })
+
+            return {
+              code: team.code,
+              name: team.name || team.code,
+              groups,
+              gameCount: games.length,
+            }
+          })
+          .filter((team) => team.gameCount > 0)
+          .sort((a, b) => a.name.localeCompare(b.name))
+      }
+
+      // ---- Rendering ------------------------------------------------------
+
+      function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, (character) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]),
+        )
+      }
+
+      function applyData(data) {
+        analyzedTeams = analyze(data)
+        contentEl.innerHTML = ''
+
+        if (analyzedTeams.length === 0) {
+          teamFilterEl.innerHTML = ''
+          teamFilterEl.style.display = 'none'
+          teamFilterLabelEl.style.display = 'none'
+          statusEl.className = 'status'
+          statusEl.textContent = 'No completed games yet. Play a delivery run, then refresh.'
+          return
+        }
+
+        teamFilterEl.style.display = ''
+        teamFilterLabelEl.style.display = ''
+
+        // Populate the selector (name + code), keeping the current pick if it survives.
+        teamFilterEl.innerHTML = analyzedTeams
+          .map(
+            (team) =>
+              '<option value="' + escapeHtml(team.code) + '">' +
+              escapeHtml(team.name + ' (' + team.code + ')') +
+              '</option>',
+          )
+          .join('')
+
+        if (!analyzedTeams.some((team) => team.code === selectedCode)) {
+          selectedCode = analyzedTeams[0].code
+        }
+        teamFilterEl.value = selectedCode
+
+        renderSelectedTeam()
+      }
+
+      function renderSelectedTeam() {
+        const teamIndex = analyzedTeams.findIndex((team) => team.code === selectedCode)
+        const team = analyzedTeams[teamIndex]
+        contentEl.innerHTML = ''
+
+        if (!team) return
+
+        statusEl.textContent = ''
+        const color = PALETTE[teamIndex % PALETTE.length]
+
+        // Overview bar charts across this team's line-count groups.
+        const categories = team.groups.map((group) => ({
+          label: group.lineCount + ' line' + (group.lineCount === 1 ? '' : 's'),
+          color,
+          first: { mean: group.firstMean, stddev: group.firstStddev, points: group.games.map((g) => g.firstDelivery) },
+          completion: { mean: group.completionMean, stddev: group.completionStddev, points: group.games.map((g) => g.completion) },
+        }))
+
+        const overview = document.createElement('section')
+        overview.className = 'panel'
+        overview.innerHTML =
+          '<h2>Overview</h2>' +
+          '<p class="caption">' + escapeHtml(team.name + ' (' + team.code + ')') +
+          ' · bars show the average across repeated runs, whiskers show ± one standard deviation (repeatability), dots are individual games.</p>' +
+          '<h3>Time to first delivery (first parcel leaves the final member)</h3>'
+        overview.appendChild(
+          barChart(categories.map((c) => ({ label: c.label, color: c.color, ...c.first }))),
+        )
+        const h3b = document.createElement('h3')
+        h3b.textContent = 'Time to complete the whole delivery (last parcel, last member)'
+        overview.appendChild(h3b)
+        overview.appendChild(
+          barChart(categories.map((c) => ({ label: c.label, color: c.color, ...c.completion }))),
+        )
+        contentEl.appendChild(overview)
+
+        // Detail: tables + delivery timeline for the selected team.
+        const section = document.createElement('section')
+        section.className = 'panel'
+
+        const heading = document.createElement('h2')
+        heading.textContent = team.name
+        section.appendChild(heading)
+
+        const caption = document.createElement('p')
+        caption.className = 'caption'
+        caption.textContent =
+          'Team code ' + team.code + ' · ' + team.gameCount + ' completed game' +
+          (team.gameCount === 1 ? '' : 's') + ', grouped by number of lines shipped.'
+        section.appendChild(caption)
+
+        team.groups.forEach((group) => {
+          const groupEl = document.createElement('div')
+          groupEl.className = 'group'
+          const title = document.createElement('h3')
+          title.textContent =
+            group.lineCount + ' line' + (group.lineCount === 1 ? '' : 's') +
+            ' · ' + group.games.length + ' game' + (group.games.length === 1 ? '' : 's')
+          groupEl.appendChild(title)
+          groupEl.appendChild(groupTable(group))
+          groupEl.appendChild(chartTitle('Parcel flow through the relay (member → member → customer)'))
+          groupEl.appendChild(flowChart(group, color))
+          groupEl.appendChild(chartTitle('Deliveries to the customer (parcels leaving the final member)'))
+          groupEl.appendChild(timelineChart(group, color))
+          section.appendChild(groupEl)
+        })
+
+        contentEl.appendChild(section)
+      }
+
+      function fmt(seconds) {
+        const value = Math.round(seconds)
+        if (value < 60) return value + 's'
+        const minutes = Math.floor(value / 60)
+        const rest = value % 60
+        return minutes + 'm ' + String(rest).padStart(2, '0') + 's'
+      }
+
+      function groupTable(group) {
+        const table = document.createElement('table')
+        const rows = group.games
+          .map((game) => {
+            const firstDiff = game.firstDelivery - group.firstMean
+            const completionDiff = game.completion - group.completionMean
+            return (
+              '<tr>' +
+              '<td>Game ' + (game.gameNumber ?? '—') + '</td>' +
+              '<td>' + fmt(game.firstDelivery) + '</td>' +
+              '<td>' + signed(firstDiff) + '</td>' +
+              '<td>' + fmt(game.completion) + '</td>' +
+              '<td>' + signed(completionDiff) + '</td>' +
+              '<td>' + game.playerCount + '</td>' +
+              '</tr>'
+            )
+          })
+          .join('')
+
+        table.innerHTML =
+          '<thead><tr>' +
+          '<th>Run</th><th>First delivery</th><th>Δ vs avg</th>' +
+          '<th>Full delivery</th><th>Δ vs avg</th><th>Members</th>' +
+          '</tr></thead>' +
+          '<tbody>' +
+          rows +
+          '<tr class="summary-row"><td>Average</td><td>' + fmt(group.firstMean) + '</td><td>—</td><td>' +
+          fmt(group.completionMean) + '</td><td>—</td><td>—</td></tr>' +
+          '<tr class="stddev-row"><td>Std deviation</td><td>' + fmt(group.firstStddev) + '</td><td>—</td><td>' +
+          fmt(group.completionStddev) + '</td><td>—</td><td>—</td></tr>' +
+          '</tbody>'
+        return table
+      }
+
+      function signed(seconds) {
+        const value = Math.round(seconds)
+        if (value === 0) return '0s'
+        return (value > 0 ? '+' : '−') + fmt(Math.abs(value))
+      }
+
+      // ---- SVG charts -----------------------------------------------------
+
+      const SVGNS = 'http://www.w3.org/2000/svg'
+
+      function el(name, attrs, text) {
+        const node = document.createElementNS(SVGNS, name)
+        for (const key in attrs) {
+          node.setAttribute(key, attrs[key])
+        }
+        if (text != null) node.textContent = text
+        return node
+      }
+
+      function niceMax(value) {
+        if (value <= 0) return 1
+        const pow = Math.pow(10, Math.floor(Math.log10(value)))
+        const n = value / pow
+        const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10
+        return step * pow
+      }
+
+      function barChart(categories) {
+        const margin = { top: 16, right: 20, bottom: 96, left: 64 }
+        const bandWidth = 118
+        const plotWidth = Math.max(categories.length * bandWidth, 240)
+        const plotHeight = 240
+        const width = margin.left + plotWidth + margin.right
+        const height = margin.top + plotHeight + margin.bottom
+
+        const allValues = categories.flatMap((c) => [c.mean + (c.stddev || 0), ...(c.points || [])])
+        const maxY = niceMax(Math.max(1, ...allValues))
+
+        const wrap = document.createElement('div')
+        wrap.className = 'chart-wrap'
+        const svg = el('svg', { viewBox: '0 0 ' + width + ' ' + height, width, height, role: 'img' })
+
+        const yTo = (value) => margin.top + plotHeight - (value / maxY) * plotHeight
+
+        // Gridlines + y labels.
+        const ticks = 4
+        for (let i = 0; i <= ticks; i += 1) {
+          const value = (maxY / ticks) * i
+          const y = yTo(value)
+          svg.appendChild(el('line', { x1: margin.left, y1: y, x2: margin.left + plotWidth, y2: y, stroke: '#d8b57e', 'stroke-width': 1 }))
+          svg.appendChild(el('text', { x: margin.left - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#6a3310' }, fmt(value)))
+        }
+
+        categories.forEach((category, index) => {
+          const cx = margin.left + index * bandWidth + bandWidth / 2
+          const barW = 46
+          const meanY = yTo(category.mean)
+          svg.appendChild(el('rect', {
+            x: cx - barW / 2, y: meanY, width: barW, height: margin.top + plotHeight - meanY,
+            fill: category.color, opacity: 0.85,
+          }))
+
+          // Std-deviation whisker.
+          if (category.stddev > 0) {
+            const topY = yTo(category.mean + category.stddev)
+            const bottomY = yTo(Math.max(0, category.mean - category.stddev))
+            svg.appendChild(el('line', { x1: cx, y1: topY, x2: cx, y2: bottomY, stroke: '#3d2200', 'stroke-width': 2 }))
+            svg.appendChild(el('line', { x1: cx - 8, y1: topY, x2: cx + 8, y2: topY, stroke: '#3d2200', 'stroke-width': 2 }))
+            svg.appendChild(el('line', { x1: cx - 8, y1: bottomY, x2: cx + 8, y2: bottomY, stroke: '#3d2200', 'stroke-width': 2 }))
+          }
+
+          // Individual game dots.
+          ;(category.points || []).forEach((value) => {
+            svg.appendChild(el('circle', { cx, cy: yTo(value), r: 3.5, fill: '#fff5dc', stroke: '#3d2200', 'stroke-width': 1.5 }))
+          })
+
+          // Rotated x label.
+          const label = el('text', {
+            x: cx, y: margin.top + plotHeight + 16, 'text-anchor': 'end', 'font-size': 11, fill: '#4b2b06',
+            transform: 'rotate(-30 ' + cx + ' ' + (margin.top + plotHeight + 16) + ')',
+          }, category.label)
+          svg.appendChild(label)
+        })
+
+        // Axes.
+        svg.appendChild(el('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: margin.top + plotHeight, stroke: '#5f3a12', 'stroke-width': 2 }))
+        svg.appendChild(el('line', { x1: margin.left, y1: margin.top + plotHeight, x2: margin.left + plotWidth, y2: margin.top + plotHeight, stroke: '#5f3a12', 'stroke-width': 2 }))
+
+        wrap.appendChild(svg)
+        return wrap
+      }
+
+      function timelineChart(group, color) {
+        const margin = { top: 16, right: 20, bottom: 52, left: 56 }
+        const plotWidth = 640
+        const plotHeight = 240
+        const width = margin.left + plotWidth + margin.right
+        const height = margin.top + plotHeight + margin.bottom
+
+        const points = [{ seconds: 0, cumulativeParcels: 0, secondsStddev: 0 }, ...group.timeline]
+        const maxX = niceMax(Math.max(1, ...points.map((p) => p.seconds + p.secondsStddev)))
+        const maxY = niceMax(Math.max(1, ...points.map((p) => p.cumulativeParcels)))
+
+        const container = document.createElement('div')
+        const legend = document.createElement('div')
+        legend.className = 'legend'
+        legend.innerHTML =
+          '<span><i style="background:' + color + '"></i>Average delivery timeline</span>' +
+          '<span><i style="background:#c79a5c"></i>Individual runs</span>' +
+          '<span><i style="background:#3d2200"></i>± std dev on time</span>'
+        container.appendChild(legend)
+
+        const wrap = document.createElement('div')
+        wrap.className = 'chart-wrap'
+        const svg = el('svg', { viewBox: '0 0 ' + width + ' ' + height, width, height, role: 'img' })
+
+        const xTo = (value) => margin.left + (value / maxX) * plotWidth
+        const yTo = (value) => margin.top + plotHeight - (value / maxY) * plotHeight
+
+        // Gridlines.
+        const ticks = 4
+        for (let i = 0; i <= ticks; i += 1) {
+          const yValue = (maxY / ticks) * i
+          const y = yTo(yValue)
+          svg.appendChild(el('line', { x1: margin.left, y1: y, x2: margin.left + plotWidth, y2: y, stroke: '#d8b57e', 'stroke-width': 1 }))
+          svg.appendChild(el('text', { x: margin.left - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#6a3310' }, Math.round(yValue)))
+
+          const xValue = (maxX / ticks) * i
+          const x = xTo(xValue)
+          svg.appendChild(el('text', { x, y: margin.top + plotHeight + 18, 'text-anchor': 'middle', 'font-size': 11, fill: '#6a3310' }, fmt(xValue)))
+        }
+
+        // Faint individual runs.
+        group.games.forEach((game) => {
+          const runPoints = [{ seconds: 0, cumulativeParcels: 0 }, ...game.timeline]
+          const d = runPoints.map((p, i) => (i === 0 ? 'M' : 'L') + xTo(p.seconds) + ' ' + yTo(p.cumulativeParcels)).join(' ')
+          svg.appendChild(el('path', { d, fill: 'none', stroke: '#c79a5c', 'stroke-width': 1.5, opacity: 0.7 }))
+        })
+
+        // Average line.
+        const avgPath = points.map((p, i) => (i === 0 ? 'M' : 'L') + xTo(p.seconds) + ' ' + yTo(p.cumulativeParcels)).join(' ')
+        svg.appendChild(el('path', { d: avgPath, fill: 'none', stroke: color, 'stroke-width': 3 }))
+
+        // Average markers + horizontal std-dev error bars.
+        points.forEach((p) => {
+          if (p.secondsStddev > 0) {
+            const y = yTo(p.cumulativeParcels)
+            const left = xTo(Math.max(0, p.seconds - p.secondsStddev))
+            const right = xTo(p.seconds + p.secondsStddev)
+            svg.appendChild(el('line', { x1: left, y1: y, x2: right, y2: y, stroke: '#3d2200', 'stroke-width': 1.5 }))
+            svg.appendChild(el('line', { x1: left, y1: y - 5, x2: left, y2: y + 5, stroke: '#3d2200', 'stroke-width': 1.5 }))
+            svg.appendChild(el('line', { x1: right, y1: y - 5, x2: right, y2: y + 5, stroke: '#3d2200', 'stroke-width': 1.5 }))
+          }
+          svg.appendChild(el('circle', { cx: xTo(p.seconds), cy: yTo(p.cumulativeParcels), r: 4, fill: color, stroke: '#fff5dc', 'stroke-width': 1.5 }))
+        })
+
+        // Axis titles.
+        svg.appendChild(el('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: margin.top + plotHeight, stroke: '#5f3a12', 'stroke-width': 2 }))
+        svg.appendChild(el('line', { x1: margin.left, y1: margin.top + plotHeight, x2: margin.left + plotWidth, y2: margin.top + plotHeight, stroke: '#5f3a12', 'stroke-width': 2 }))
+        svg.appendChild(el('text', { x: margin.left + plotWidth / 2, y: height - 8, 'text-anchor': 'middle', 'font-size': 12, fill: '#4b2b06' }, 'Time since game start'))
+        svg.appendChild(el('text', { x: 14, y: margin.top + plotHeight / 2, 'text-anchor': 'middle', 'font-size': 12, fill: '#4b2b06', transform: 'rotate(-90 14 ' + (margin.top + plotHeight / 2) + ')' }, 'Parcels delivered'))
+
+        wrap.appendChild(svg)
+        container.appendChild(wrap)
+        return container
+      }
+
+      function chartTitle(text) {
+        const heading = document.createElement('p')
+        heading.className = 'chart-title'
+        heading.textContent = text
+        return heading
+      }
+
+      const FLOW_PALETTE = ['#c8641e', '#2b7fb8', '#4f8a3a', '#a4231c', '#7a5cb0', '#0f7d84', '#b8892b']
+
+      // Shows parcels flowing through each relay member over time: one line per
+      // member position (member 1 hands to member 2 ... the final member ships to
+      // the customer). The final member's line is the endpoint delivery curve.
+      function flowChart(group, finalColor) {
+        const margin = { top: 16, right: 20, bottom: 52, left: 56 }
+        const plotWidth = 640
+        const plotHeight = 240
+        const width = margin.left + plotWidth + margin.right
+        const height = margin.top + plotHeight + margin.bottom
+
+        const series = group.flow.map((member) => {
+          const isFinal = member.isFinal
+          return {
+            isFinal,
+            color: isFinal ? finalColor : FLOW_PALETTE[member.position % FLOW_PALETTE.length],
+            label:
+              'Member ' + (member.position + 1) +
+              (member.playerName ? ' · ' + member.playerName : '') +
+              (isFinal ? ' → customer' : ''),
+            points: [{ seconds: 0, cumulativeParcels: 0, secondsStddev: 0 }, ...member.points],
+          }
+        })
+
+        const allPoints = series.flatMap((line) => line.points)
+        const maxX = niceMax(Math.max(1, ...allPoints.map((p) => p.seconds + (p.secondsStddev || 0))))
+        const maxY = niceMax(Math.max(1, ...allPoints.map((p) => p.cumulativeParcels)))
+
+        const container = document.createElement('div')
+        const legend = document.createElement('div')
+        legend.className = 'legend'
+        legend.innerHTML = series
+          .map(
+            (line) =>
+              '<span><i style="background:' + line.color + '"></i>' + escapeHtml(line.label) + '</span>',
+          )
+          .join('')
+        container.appendChild(legend)
+
+        const wrap = document.createElement('div')
+        wrap.className = 'chart-wrap'
+        const svg = el('svg', { viewBox: '0 0 ' + width + ' ' + height, width, height, role: 'img' })
+
+        const xTo = (value) => margin.left + (value / maxX) * plotWidth
+        const yTo = (value) => margin.top + plotHeight - (value / maxY) * plotHeight
+
+        // Gridlines + axis ticks.
+        const ticks = 4
+        for (let i = 0; i <= ticks; i += 1) {
+          const yValue = (maxY / ticks) * i
+          const y = yTo(yValue)
+          svg.appendChild(el('line', { x1: margin.left, y1: y, x2: margin.left + plotWidth, y2: y, stroke: '#d8b57e', 'stroke-width': 1 }))
+          svg.appendChild(el('text', { x: margin.left - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#6a3310' }, Math.round(yValue)))
+
+          const xValue = (maxX / ticks) * i
+          svg.appendChild(el('text', { x: xTo(xValue), y: margin.top + plotHeight + 18, 'text-anchor': 'middle', 'font-size': 11, fill: '#6a3310' }, fmt(xValue)))
+        }
+
+        // One line per relay member; the final member is drawn thicker.
+        series.forEach((line) => {
+          const d = line.points
+            .map((p, i) => (i === 0 ? 'M' : 'L') + xTo(p.seconds) + ' ' + yTo(p.cumulativeParcels))
+            .join(' ')
+          svg.appendChild(el('path', {
+            d, fill: 'none', stroke: line.color,
+            'stroke-width': line.isFinal ? 3 : 2,
+            opacity: line.isFinal ? 1 : 0.9,
+          }))
+          line.points.forEach((p) => {
+            svg.appendChild(el('circle', { cx: xTo(p.seconds), cy: yTo(p.cumulativeParcels), r: line.isFinal ? 4 : 3, fill: line.color, stroke: '#fff5dc', 'stroke-width': 1.5 }))
+          })
+        })
+
+        // Axes + titles.
+        svg.appendChild(el('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: margin.top + plotHeight, stroke: '#5f3a12', 'stroke-width': 2 }))
+        svg.appendChild(el('line', { x1: margin.left, y1: margin.top + plotHeight, x2: margin.left + plotWidth, y2: margin.top + plotHeight, stroke: '#5f3a12', 'stroke-width': 2 }))
+        svg.appendChild(el('text', { x: margin.left + plotWidth / 2, y: height - 8, 'text-anchor': 'middle', 'font-size': 12, fill: '#4b2b06' }, 'Time since game start'))
+        svg.appendChild(el('text', { x: 14, y: margin.top + plotHeight / 2, 'text-anchor': 'middle', 'font-size': 12, fill: '#4b2b06', transform: 'rotate(-90 14 ' + (margin.top + plotHeight / 2) + ')' }, 'Parcels handed on'))
+
+        wrap.appendChild(svg)
+        container.appendChild(wrap)
+        return container
+      }
+    </script>
+  </body>
+</html>
