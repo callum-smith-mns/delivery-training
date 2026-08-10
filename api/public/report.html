@@ -290,7 +290,9 @@
         statusEl.className = 'status'
         statusEl.textContent = 'Loading team data…'
         try {
-          const response = await fetch('/api/data', { cache: 'no-store' })
+          // Resolve relative to this page so it works when the API (and this
+          // report) is hosted under a subfolder rather than the domain root.
+          const response = await fetch('api/data', { cache: 'no-store' })
           if (!response.ok) {
             throw new Error('Server responded with ' + response.status)
           }

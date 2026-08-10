@@ -8,19 +8,31 @@ import { TeamService } from './service/teamService.js'
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const reportFile = path.join(currentDir, 'public', 'report.html')
 
-export function createApiApp({ dbPath } = {}) {
+// Normalize a mount prefix (e.g. "/delivery" or "delivery/") to a leading-slash,
+// no-trailing-slash path, or '' when the API is served from the domain root.
+function normalizeBasePath(value) {
+  if (!value) return ''
+  const trimmed = String(value).trim().replace(/\/+$/, '')
+  if (!trimmed || trimmed === '/') return ''
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+}
+
+export function createApiApp({ dbPath, basePath } = {}) {
   const storage = new FileStorage(dbPath ?? 'api/data/teams.json')
   const teamService = new TeamService({ storage })
+  const mountPath = normalizeBasePath(basePath ?? process.env.BASE_PATH)
 
   const app = express()
   app.use(cors())
   app.use(express.json())
 
-  app.get('/api/health', (_request, response) => {
+  const router = express.Router()
+
+  router.get('/api/health', (_request, response) => {
     response.json({ ok: true })
   })
 
-  app.post('/api/teams', async (request, response, next) => {
+  router.post('/api/teams', async (request, response, next) => {
     try {
       const result = await teamService.createTeam({
         playerName: request.body?.name,
@@ -33,7 +45,7 @@ export function createApiApp({ dbPath } = {}) {
     }
   })
 
-  app.post('/api/teams/join', async (request, response, next) => {
+  router.post('/api/teams/join', async (request, response, next) => {
     try {
       const result = await teamService.joinTeam({
         teamCode: request.body?.teamCode,
@@ -45,7 +57,7 @@ export function createApiApp({ dbPath } = {}) {
     }
   })
 
-  app.get('/api/teams/:teamCode', async (request, response, next) => {
+  router.get('/api/teams/:teamCode', async (request, response, next) => {
     try {
       const team = await teamService.getTeam(request.params.teamCode)
       response.json({ team })
@@ -54,7 +66,7 @@ export function createApiApp({ dbPath } = {}) {
     }
   })
 
-  app.post('/api/teams/:teamCode/start', async (request, response, next) => {
+  router.post('/api/teams/:teamCode/start', async (request, response, next) => {
     try {
       const team = await teamService.startGame({
         teamCode: request.params.teamCode,
@@ -69,7 +81,7 @@ export function createApiApp({ dbPath } = {}) {
     }
   })
 
-  app.post('/api/teams/:teamCode/load', async (request, response, next) => {
+  router.post('/api/teams/:teamCode/load', async (request, response, next) => {
     try {
       const team = await teamService.loadParcel({
         teamCode: request.params.teamCode,
@@ -84,7 +96,7 @@ export function createApiApp({ dbPath } = {}) {
     }
   })
 
-  app.post('/api/teams/:teamCode/play', async (request, response, next) => {
+  router.post('/api/teams/:teamCode/play', async (request, response, next) => {
     try {
       const team = await teamService.playLine({
         teamCode: request.params.teamCode,
@@ -97,7 +109,7 @@ export function createApiApp({ dbPath } = {}) {
     }
   })
 
-  app.post('/api/teams/:teamCode/restart', async (request, response, next) => {
+  router.post('/api/teams/:teamCode/restart', async (request, response, next) => {
     try {
       const team = await teamService.restartGame({
         teamCode: request.params.teamCode,
@@ -109,7 +121,7 @@ export function createApiApp({ dbPath } = {}) {
     }
   })
 
-  app.get('/api/teams/:teamCode/stats', async (request, response, next) => {
+  router.get('/api/teams/:teamCode/stats', async (request, response, next) => {
     try {
       const team = await teamService.getTeam(request.params.teamCode)
       const currentGame = team.game
@@ -132,7 +144,7 @@ export function createApiApp({ dbPath } = {}) {
     }
   })
 
-  app.get('/api/data', async (_request, response, next) => {
+  router.get('/api/data', async (_request, response, next) => {
     try {
       const data = await storage.readData()
       response.json(data)
@@ -141,9 +153,13 @@ export function createApiApp({ dbPath } = {}) {
     }
   })
 
-  app.get(['/report', '/report.html'], (_request, response) => {
+  router.get(['/report', '/report.html'], (_request, response) => {
     response.sendFile(reportFile)
   })
+
+  // Mount every route under the configurable base path so the API can be hosted
+  // in a subfolder; requests then resolve relative to that prefix.
+  app.use(mountPath || '/', router)
 
   app.use((error, _request, response, _next) => {
     const statusCode = error.statusCode ?? 500

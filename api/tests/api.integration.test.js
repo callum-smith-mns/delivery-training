@@ -223,4 +223,15 @@ describe('Delivery API integration', () => {
     expect(response.headers['content-type']).toMatch(/text\/html/)
     expect(response.text).toMatch(/Delivery Rails · Team Stats/)
   })
+
+  it('mounts every route under a configurable base path', async () => {
+    const scopedApp = createApiApp({ dbPath, basePath: 'delivery/' })
+
+    await request(scopedApp).get('/delivery/api/health').expect(200)
+    await request(scopedApp).get('/delivery/api/data').expect(200)
+    await request(scopedApp).get('/delivery/report').expect(200)
+
+    // The unprefixed root paths no longer resolve when a base path is set.
+    await request(scopedApp).get('/api/health').expect(404)
+  })
 })
