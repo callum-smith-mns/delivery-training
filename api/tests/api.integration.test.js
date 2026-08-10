@@ -224,14 +224,53 @@ describe('Delivery API integration', () => {
     expect(response.text).toMatch(/Delivery Rails · Team Stats/)
   })
 
-  it('mounts every route under a configurable base path', async () => {
-    const scopedApp = createApiApp({ dbPath, basePath: 'delivery/' })
+  it('runs the full game lifecycle under a configurable base path', async () => {
+    const scopedApp = createApiApp({ dbPath, basePath: 'something-non-standard/' })
+    const base = '/something-non-standard'
 
-    await request(scopedApp).get('/delivery/api/health').expect(200)
-    await request(scopedApp).get('/delivery/api/data').expect(200)
-    await request(scopedApp).get('/delivery/report').expect(200)
+    await request(scopedApp).get(`${base}/api/health`).expect(200)
+    await request(scopedApp).get(`${base}/report`).expect(200)
+
+    const created = await request(scopedApp)
+      .post(`${base}/api/teams`)
+      .send({ name: 'Host', teamName: 'Subfolder Crew', origin: 'http://localhost:4173' })
+      .expect(201)
+    expect(created.body.team.name).toBe('Subfolder Crew')
+
+    const teamCode = created.body.team.code
+    const hostId = created.body.session.playerId
+
+    const started = await request(scopedApp)
+      .post(`${base}/api/teams/${teamCode}/start`)
+      .send({ playerId: hostId, lineCount: 1, totalCarriages: 1, parcelsPerCarriage: 1 })
+      .expect(200)
+
+    const line = started.body.team.game.lines[0]
+
+    await request(scopedApp)
+      .post(`${base}/api/teams/${teamCode}/load`)
+      .send({
+        playerId: hostId,
+        lineId: 'line-1',
+        carriageId: line.carriages[0].id,
+        parcelId: line.parcelPool[0],
+      })
+      .expect(200)
+
+    const played = await request(scopedApp)
+      .post(`${base}/api/teams/${teamCode}/play`)
+      .send({ playerId: hostId, lineId: 'line-1' })
+      .expect(200)
+    expect(played.body.team.status).toBe('completed')
+
+    const stats = await request(scopedApp).get(`${base}/api/teams/${teamCode}/stats`).expect(200)
+    expect(stats.body.scoreEvents).toHaveLength(1)
+
+    const data = await request(scopedApp).get(`${base}/api/data`).expect(200)
+    expect(data.body.teams[teamCode]).toBeDefined()
 
     // The unprefixed root paths no longer resolve when a base path is set.
     await request(scopedApp).get('/api/health').expect(404)
+    await request(scopedApp).post('/api/teams').send({ name: 'Host', teamName: 'X' }).expect(404)
   })
 })
