@@ -188,11 +188,177 @@
   font-size: 0.9rem;
 }
 
+.stats-report-screen {
+  max-width: 1140px;
+  margin: 0 auto;
+  grid-template-rows: auto auto 1fr;
+}
+
+.stats-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: #4b2b06;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+}
+
+.stats-toolbar select {
+  min-width: 240px;
+  height: 44px;
+  border: 3px solid #4f3f1f;
+  background: #fff5dc;
+  color: #3d2200;
+  font: inherit;
+  padding: 0 8px;
+}
+
+.stats-toolbar span {
+  color: #6a3310;
+  font-weight: 400;
+  text-transform: none;
+}
+
+.stats-panel {
+  border: 4px solid #5f3a12;
+  background: #ffe7bf;
+  box-shadow: inset 0 -6px #e5be80;
+  padding: 16px 16px 24px;
+}
+
+.stats-panel h2,
+.stats-panel h3 {
+  color: #532800;
+  text-transform: uppercase;
+}
+
+.stats-panel h2 {
+  margin: 0 0 4px;
+  font-size: 1.2rem;
+}
+
+.stats-panel h3 {
+  margin: 18px 0 8px;
+  font-size: 1rem;
+}
+
+.stats-caption {
+  margin: 0 0 12px;
+  color: #6a3310;
+  font-size: 0.85rem;
+}
+
+.stats-group {
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 3px dashed #c79a5c;
+}
+
+.stats-group:first-of-type {
+  border-top: 0;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 8px 0 4px;
+}
+
+.stats-table th,
+.stats-table td {
+  border: 2px solid #c79a5c;
+  padding: 6px 8px;
+  text-align: right;
+}
+
+.stats-table th:first-child,
+.stats-table td:first-child {
+  text-align: left;
+}
+
+.stats-table th {
+  background: #f6d6a2;
+  color: #4b2b06;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.stats-table .summary-row td {
+  background: #fff2d8;
+  color: #5a1f00;
+  font-weight: 700;
+}
+
+.stats-table .stddev-row td {
+  background: #fbe4e2;
+  color: #a4231c;
+}
+
+.chart-title {
+  margin: 14px 0 6px;
+  color: #532800;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.stats-chart-wrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.stats-chart {
+  display: block;
+  width: 720px;
+  max-width: none;
+  height: 320px;
+}
+
+.stats-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 6px 0 10px;
+  color: #4b2b06;
+  font-size: 0.8rem;
+}
+
+.stats-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stats-legend i {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+@media (max-width: 680px) {
+  .stats-report-screen {
+    padding: 12px;
+  }
+
+  .stats-table {
+    min-width: 720px;
+  }
+
+  .stats-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
 .train-yard {
   display: flex;
   flex-direction: column;
   justify-content: end;
   gap: 24px;
+  min-width: 0;
 }
 
 .yard-waiting,
@@ -216,6 +382,26 @@
 .train-line {
   width: 100%;
   margin-top: auto;
+  min-width: 0;
+}
+
+/* Per-line horizontal scroll: each settled train scrolls independently so a
+   consist wider than the screen stays reachable. Bottom padding leaves room for
+   the wheels that sit just below the carriages. */
+.train-scroll.is-scrollable {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 14px;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+/* When scrolling, the consist must take its full natural width (not clamp to
+   the container) so the off-screen carriages create a scrollable overflow. */
+.train-scroll.is-scrollable .train-consist {
+  width: max-content;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .train-consist {
@@ -281,6 +467,7 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  flex: 0 0 auto;
 }
 
 .line-owner {
@@ -360,6 +547,7 @@
   display: grid;
   grid-template-rows: auto auto auto;
   gap: 4px;
+  flex: 0 0 auto;
 }
 
 .carriage.can-drop {
@@ -506,6 +694,21 @@
   margin: 10px 0 0;
   color: #7e1700;
   font-weight: 700;
+}
+
+.team-admin-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) auto auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 2px solid #d8b77e;
+}
+
+@media (max-width: 700px) {
+  .team-admin-row {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .parcel-knot {

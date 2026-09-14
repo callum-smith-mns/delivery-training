@@ -244,10 +244,69 @@
         color: var(--accent-red);
         font-weight: 700;
       }
+
+      .password-gate {
+        max-width: 520px;
+        margin: 15vh auto 0;
+        border: 4px solid var(--panel-border);
+        background: var(--panel-bg);
+        box-shadow: inset 0 -6px var(--panel-shadow);
+        padding: 24px;
+      }
+
+      .password-gate h1 {
+        margin-top: 0;
+        color: var(--title);
+      }
+
+      .password-gate label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--label);
+        font-weight: 700;
+      }
+
+      .password-gate input {
+        width: 100%;
+        height: 44px;
+        border: 3px solid var(--panel-border);
+        background: #fff5dc;
+        color: var(--ink);
+        font: inherit;
+        padding: 0 8px;
+      }
+
+      .password-gate button {
+        margin-top: 12px;
+        height: 44px;
+        padding: 0 18px;
+        border: 3px solid var(--accent-green-border);
+        background: var(--accent-green-bg);
+        color: var(--accent-green-ink);
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .password-error {
+        color: var(--accent-red);
+        font-weight: 700;
+      }
     </style>
   </head>
   <body>
-    <div class="report">
+    <main id="password-gate" class="password-gate">
+      <h1>Delivery Rails</h1>
+      <p>Enter the access password to view team reporting.</p>
+      <form id="password-form">
+        <label for="report-password">Password</label>
+        <input id="report-password" type="password" autocomplete="off" required />
+        <button type="submit">Enter</button>
+        <p id="password-error" class="password-error" role="alert" hidden>Incorrect password.</p>
+      </form>
+    </main>
+
+    <div id="report" class="report" hidden>
       <header class="report-header">
         <div>
           <h1>Delivery Rails · Team Stats</h1>
@@ -266,6 +325,13 @@
     </div>
 
     <script>
+      const REPORT_PASSWORD = 'TheConductorIsHere'
+      const passwordGate = document.getElementById('password-gate')
+      const passwordForm = document.getElementById('password-form')
+      const passwordInput = document.getElementById('report-password')
+      const passwordError = document.getElementById('password-error')
+      const reportEl = document.getElementById('report')
+
       const PALETTE = ['#5a1f00', '#2b7fb8', '#c8641e', '#4f8a3a', '#a4231c', '#7a5cb0', '#0f7d84']
 
       const contentEl = document.getElementById('content')
@@ -278,13 +344,23 @@
       let analyzedTeams = []
       let selectedCode = null
 
+      passwordForm.addEventListener('submit', (event) => {
+        event.preventDefault()
+        if (passwordInput.value !== REPORT_PASSWORD) {
+          passwordError.hidden = false
+          return
+        }
+
+        passwordError.hidden = true
+        passwordGate.hidden = true
+        reportEl.hidden = false
+        load()
+      })
       refreshBtn.addEventListener('click', load)
       teamFilterEl.addEventListener('change', () => {
         selectedCode = teamFilterEl.value
         renderSelectedTeam()
       })
-      load()
-
       async function load() {
         refreshBtn.disabled = true
         statusEl.className = 'status'

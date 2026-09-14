@@ -16,6 +16,12 @@ async function joinTeamAs(page, name, code) {
   await expect(page.getByTestId('lobby-players')).toContainText(name)
 }
 
+async function unlockProtectedView(page) {
+  await expect(page.getByTestId('protected-password')).toBeVisible()
+  await page.getByTestId('protected-password').fill('TheConductorIsHere')
+  await page.getByTestId('unlock-protected-view').click()
+}
+
 // The controlling player is the one who both sees this line's train and has a
 // draggable parcel in the shared pool. Parcels are no longer tied to a line, so
 // the first pool parcel (`parcel-parcel-1`) is the reliable signal.
@@ -141,6 +147,61 @@ test('creating a team with a name shows it in the lobby', async ({ page }) => {
   await expect(page.getByTestId('team-name-value')).toContainText('Platform Crew')
 })
 
+test('reload restores the existing player session without asking to join again', async ({ page }) => {
+  const code = await createTeamAs(page, 'Reloadable')
+
+  await page.reload()
+
+  await expect(page.getByTestId('team-code-value')).toHaveText(code)
+  await expect(page.getByTestId('lobby-players')).toContainText('Reloadable')
+  await expect(page.getByTestId('player-name')).toHaveCount(0)
+})
+
+test('rejoining with the same name and code does not add a duplicate player', async ({ browser, page }) => {
+  const code = await createTeamAs(page, 'Returning')
+  const returningContext = await browser.newContext()
+  const returningPage = await returningContext.newPage()
+
+  await joinTeamAs(returningPage, 'Returning', code)
+  await expect(returningPage.getByTestId('lobby-players').locator('li')).toHaveCount(1)
+
+  await returningContext.close()
+})
+
+test('admin can see active teams and cancel an in-game session', async ({ page }) => {
+  const before = await page.request.get('/api/admin/overview').then((response) => response.json())
+  await createTeamAs(page, 'Admin Target')
+  await page.getByTestId('line-count-select').selectOption('1')
+  await page.getByTestId('start-round').click()
+  await expect(page.getByTestId('train-line-1')).toBeVisible()
+  const code = await page.evaluate(() => new URL(window.location.href).searchParams.get('team'))
+
+  const adminPage = await page.context().newPage()
+  await adminPage.goto('/admin')
+  await unlockProtectedView(adminPage)
+  await expect(adminPage.getByTestId('admin-page')).toBeVisible()
+  await expect(adminPage.getByTestId('active-team-count')).toHaveText(
+    String(before.counts.active + 1),
+  )
+  await adminPage.getByTestId(`cancel-team-${code}`).click()
+  await expect(adminPage.getByTestId('active-team-count')).toHaveText(
+    String(before.counts.active),
+  )
+  await expect(page.getByTestId('team-code-value')).toHaveText(code)
+  expect(code).toBeTruthy()
+})
+
+test('live statistics page shows persisted team status data', async ({ page }) => {
+  const code = await createTeamAs(page, 'Stats Viewer')
+  const statsPage = await page.context().newPage()
+
+  await statsPage.goto('/stats')
+  await unlockProtectedView(statsPage)
+  await expect(statsPage.getByTestId('stats-page')).toBeVisible()
+  await expect(statsPage.getByTestId(`team-status-${code}`)).toHaveText('lobby')
+  await expect(statsPage.getByTestId('team-status-counts')).toContainText('lobby')
+})
+
 test('creating a team without a team name is rejected', async ({ page }) => {
   await page.goto('/')
   await page.getByTestId('player-name').fill('Host')
@@ -242,6 +303,39 @@ test('dropping a parcel onto a carriage loads it and updates progress', async ({
   // Loading one parcel converts one shared-pool slot into a placeholder.
   await expect(page.getByTestId('parcel-slot-placeholder-1')).toBeVisible()
   await expect(page.getByTestId('carriage-line-1-carriage-1')).toContainText('0 parcels needed')
+})
+
+test('dragging a parcel near the screen edges scrolls the page', async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 400 })
+  await createTeamAs(page, 'Solo')
+  await page.getByTestId('line-count-select').selectOption('1')
+  await page.getByTestId('start-round').click()
+  await expect(page.getByTestId('carriage-line-1-carriage-1')).toBeVisible()
+
+  const parcel = page.getByTestId('parcel-parcel-1')
+  await parcel.scrollIntoViewIfNeeded()
+  const parcelBox = await parcel.boundingBox()
+  const startX = parcelBox.x + parcelBox.width / 2
+  const startY = parcelBox.y + parcelBox.height / 2
+
+  await page.mouse.move(startX, startY)
+  await page.mouse.down()
+  await page.mouse.move(startX + 10, startY + 10)
+  await expect(page.getByTestId('drag-overlay')).toBeVisible()
+
+  const initialScrollY = await page.evaluate(() => window.scrollY)
+  await page.mouse.move(startX + 10, 695)
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), { timeout: 3000 })
+    .toBeGreaterThan(initialScrollY)
+
+  const bottomScrollY = await page.evaluate(() => window.scrollY)
+  await page.mouse.move(startX + 10, 5)
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), { timeout: 3000 })
+    .toBeLessThan(bottomScrollY)
+
+  await page.mouse.up()
 })
 
 test('two consecutive drags are accepted into two carriages', async ({ page }) => {
@@ -437,6 +531,108 @@ test('shipped train slides out to the right instead of disappearing', async ({ p
   const laterX = (await train.boundingBox()).x
   expect(laterX).toBeGreaterThan(midX)
 })
+
+// The horizontal scroll changed the resting position: a settled train sits at
+// the left of its line (the scroll origin) rather than centred, so the
+// arrival/departure slide must start and end there for both short and long
+// trains. These cover a short train that fits the line and a long train that
+// overflows it.
+test.describe('train resting alignment with horizontal scrolling', () => {
+  async function measureLine(page, lineId) {
+    return page.getByTestId(`train-${lineId}`).evaluate((consist) => {
+      const scroll = consist.closest('.train-scroll')
+      const scrollBox = scroll.getBoundingClientRect()
+      const consistBox = consist.getBoundingClientRect()
+      return {
+        restingOffset: Math.round(consistBox.left - scrollBox.left),
+        overflow: scroll.scrollWidth - scroll.clientWidth,
+        isScrollable: scroll.classList.contains('is-scrollable'),
+      }
+    })
+  }
+
+  test('a short train that fits the line rests flush at the left, not centred', async ({ page }) => {
+    // Four lines split the eight carriages into short two-carriage consists that
+    // are narrower than the line at a desktop width.
+    await page.setViewportSize({ width: 1100, height: 900 })
+    await createTeamAs(page, 'Short Rester')
+    await page.getByTestId('line-count-select').selectOption('4')
+    await page.getByTestId('start-round').click()
+    await expect(page.getByTestId('carriage-line-1-carriage-1')).toBeVisible()
+    await waitForTrainsSettled(page)
+    await expect(page.getByTestId('line-scroll-line-1')).toHaveClass(/is-scrollable/)
+
+    const measured = await measureLine(page, 'line-1')
+    // It fits (no overflow) yet still rests at the left edge rather than centred.
+    expect(measured.overflow).toBe(0)
+    expect(Math.abs(measured.restingOffset)).toBeLessThanOrEqual(1)
+  })
+
+  test('a long train that overflows the line rests at the left and can scroll', async ({ page }) => {
+    // A single line keeps all eight carriages together; at a phone width the
+    // consist is far longer than the line.
+    await page.setViewportSize({ width: 360, height: 740 })
+    await createTeamAs(page, 'Long Rester')
+    await page.getByTestId('line-count-select').selectOption('1')
+    await page.getByTestId('start-round').click()
+    await expect(page.getByTestId('carriage-line-1-carriage-1')).toBeVisible()
+    await waitForTrainsSettled(page)
+    await expect(page.getByTestId('line-scroll-line-1')).toHaveClass(/is-scrollable/)
+
+    const measured = await measureLine(page, 'line-1')
+    expect(measured.overflow).toBeGreaterThan(0)
+    expect(Math.abs(measured.restingOffset)).toBeLessThanOrEqual(1)
+  })
+
+  test('the arrival slide lands at the same left resting position (no centre jump)', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 900 })
+    await createTeamAs(page, 'Arrival Watcher')
+    await page.getByTestId('line-count-select').selectOption('4')
+    await page.getByTestId('start-round').click()
+
+    const train = page.getByTestId('train-line-1')
+
+    // While arriving the consist is translated in from the left (negative X).
+    await expect(train).toHaveClass(/arriving/)
+    const arrivingTransform = await train.evaluate(
+      (element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).m41,
+    )
+    expect(arrivingTransform).toBeLessThan(0)
+
+    // Once settled the transform is cleared and it rests flush left, meaning the
+    // slide ended exactly where the train sits (no snap from centre to left).
+    await waitForTrainsSettled(page)
+    const settled = await measureLine(page, 'line-1')
+    expect(Math.abs(settled.restingOffset)).toBeLessThanOrEqual(1)
+    const settledTransform = await train.evaluate(
+      (element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).m41,
+    )
+    expect(Math.abs(settledTransform)).toBeLessThan(1)
+  })
+
+  test('the departure slide leaves from the left resting position', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 900 })
+    await createTeamAs(page, 'Departure Watcher')
+    await page.getByTestId('line-count-select').selectOption('4')
+    await page.getByTestId('start-round').click()
+    await expect(page.getByTestId('carriage-line-1-carriage-1')).toBeVisible()
+    await waitForTrainsSettled(page)
+
+    const train = page.getByTestId('train-line-1')
+    const restingLeft = (await train.boundingBox()).x
+
+    await loadLineFully(page, 'line-1')
+    await page.getByTestId('ship-line-1').click()
+    await expect(train).toHaveClass(/departed/)
+
+    // The very start of the departure is anchored at the resting left position,
+    // then it slides rightwards off screen.
+    await page.waitForTimeout(300)
+    const midX = (await train.boundingBox()).x
+    expect(midX).toBeGreaterThan(restingLeft + 20)
+  })
+})
+
 
 test('all trains arrive on screen when a multi-line round starts', async ({ page }) => {
   await createTeamAs(page, 'Solo')
@@ -817,6 +1013,11 @@ test('the API-served stats report analyses completed games', async ({ page }) =>
 
   // The report is a static page served by the API service on port 3001.
   await page.goto('http://127.0.0.1:3001/report')
+  await page.getByLabel('Password').fill('wrong-password')
+  await page.getByRole('button', { name: 'Enter' }).click()
+  await expect(page.getByRole('alert')).toHaveText('Incorrect password.')
+  await page.getByLabel('Password').fill('TheConductorIsHere')
+  await page.getByRole('button', { name: 'Enter' }).click()
   await expect(
     page.getByRole('heading', { name: 'Delivery Rails · Team Stats' }),
   ).toBeVisible()
@@ -834,4 +1035,275 @@ test('the API-served stats report analyses completed games', async ({ page }) =>
   await expect(page.locator('.status.error')).toHaveCount(0)
   await expect(page.locator('svg').first()).toBeVisible()
 })
+
+test('admin and reporting screens require the configured dummy password', async ({ page }) => {
+  for (const [path, pageTestId] of [
+    ['/admin', 'admin-page'],
+    ['/stats', 'stats-page'],
+  ]) {
+    await page.goto(path)
+    await expect(page.getByTestId('protected-screen')).toBeVisible()
+    await page.getByTestId('protected-password').fill('wrong-password')
+    await page.getByTestId('unlock-protected-view').click()
+    await expect(page.getByTestId('protected-access-error')).toHaveText('Incorrect password.')
+    await expect(page.getByTestId(pageTestId)).toHaveCount(0)
+
+    await unlockProtectedView(page)
+    await expect(page.getByTestId(pageTestId)).toBeVisible()
+  }
+})
+
+test('creating a team without a player name is rejected', async ({ page }) => {
+  await page.goto('/')
+  await page.getByTestId('team-name').fill('Unnamed Host Crew')
+  await page.getByTestId('create-team').click()
+
+  await expect(page.getByText('Please enter your name.')).toBeVisible()
+  await expect(page.getByTestId('team-code-value')).toHaveCount(0)
+})
+
+test('joining without a name or team code is rejected', async ({ page }) => {
+  await page.goto('/')
+  await page.getByTestId('join-team').click()
+  await expect(page.getByText('Please enter your name.')).toBeVisible()
+
+  await page.getByTestId('player-name').fill('Guest')
+  await page.getByTestId('join-team').click()
+  await expect(page.getByText('Please enter a team code.')).toBeVisible()
+  await expect(page.getByTestId('team-code-value')).toHaveCount(0)
+})
+
+test('joining an unknown team shows the API error without leaving setup', async ({ page }) => {
+  await page.goto('/?team=not-a-real-team')
+  await page.getByTestId('player-name').fill('Guest')
+  await page.getByTestId('join-team').click()
+
+  await expect(page.getByText('Team not found')).toBeVisible()
+  await expect(page.getByTestId('join-team')).toBeVisible()
+  await expect(page.getByTestId('team-code-value')).toHaveCount(0)
+})
+
+test('team codes are case-insensitive when joining', async ({ browser, page }) => {
+  const code = await createTeamAs(page, 'Host')
+  const guestContext = await browser.newContext()
+  const guestPage = await guestContext.newPage()
+
+  await joinTeamAs(guestPage, 'Lowercase Guest', code.toLowerCase())
+  await expect(guestPage.getByTestId('team-code-value')).toHaveText(code)
+
+  await guestContext.close()
+})
+
+test('a new player cannot join after the host starts the game', async ({ browser, page }) => {
+  const code = await createTeamAs(page, 'Host')
+  await page.getByTestId('line-count-select').selectOption('1')
+  await page.getByTestId('start-round').click()
+  await expect(page.getByTestId('train-line-1')).toBeVisible()
+
+  const guestContext = await browser.newContext()
+  const guestPage = await guestContext.newPage()
+  await guestPage.goto(`/?team=${code}`)
+  await guestPage.getByTestId('player-name').fill('Late Guest')
+  await guestPage.getByTestId('join-team').click()
+
+  await expect(guestPage.getByText('Team is already in an active game')).toBeVisible()
+  await expect(guestPage.getByTestId('join-team')).toBeVisible()
+  await guestContext.close()
+})
+
+test('a non-host cannot start a game', async ({ browser, page }) => {
+  const code = await createTeamAs(page, 'Host')
+  const guestContext = await browser.newContext()
+  const guestPage = await guestContext.newPage()
+  await joinTeamAs(guestPage, 'Guest', code)
+
+  await expect(guestPage.getByTestId('waiting-host')).toBeVisible()
+  await expect(guestPage.getByTestId('start-round')).toHaveCount(0)
+
+  const guestSession = await guestPage.evaluate(() =>
+    JSON.parse(localStorage.getItem('delivery-training-session')),
+  )
+  const response = await guestPage.request.post(`/api/teams/${code}/start`, {
+    data: { playerId: guestSession.playerId, lineCount: 1 },
+  })
+  expect(response.status()).toBe(403)
+  expect((await response.json()).error).toBe('Only the host can start the game')
+
+  await guestContext.close()
+})
+
+test('starting an already active game returns a conflict', async ({ page }) => {
+  const code = await createTeamAs(page, 'Host')
+  const hostSession = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('delivery-training-session')),
+  )
+
+  await page.getByTestId('start-round').click()
+  await expect(page.getByTestId('train-line-1')).toBeVisible()
+
+  const response = await page.request.post(`/api/teams/${code}/start`, {
+    data: { playerId: hostSession.playerId, lineCount: 1 },
+  })
+  expect(response.status()).toBe(409)
+  expect((await response.json()).error).toBe('Game is already active')
+})
+
+test('unknown and unauthorized game actions are rejected by the API', async ({ page }) => {
+  await page.goto('/')
+
+  const missingTeam = await page.request.get('/api/teams/UNKNOWN00')
+  expect(missingTeam.status()).toBe(404)
+  expect((await missingTeam.json()).error).toBe('Team not found')
+
+  const missingPlayer = await page.request.post('/api/teams/UNKNOWN00/start', {
+    data: { playerId: 'not-a-member', lineCount: 1 },
+  })
+  expect(missingPlayer.status()).toBe(404)
+  expect((await missingPlayer.json()).error).toBe('Team not found')
+})
+
+test('reloading during an active game restores the player session', async ({ page }) => {
+  await createTeamAs(page, 'Reloading Player')
+  await page.getByTestId('line-count-select').selectOption('2')
+  await page.getByTestId('start-round').click()
+  await expect(page.getByTestId('train-line-1')).toBeVisible()
+  await expect(page.getByTestId('train-line-2')).toBeVisible()
+
+  await page.reload()
+
+  await expect(page.getByTestId('train-line-1')).toBeVisible()
+  await expect(page.getByTestId('train-line-2')).toBeVisible()
+  await expect(page.getByTestId('player-name')).toHaveCount(0)
+})
+
+test('malformed stored session falls back to setup instead of crashing', async ({ page }) => {
+  await page.goto('/')
+  await page.evaluate(() => {
+    localStorage.setItem('delivery-training-session', '{not valid json')
+  })
+  await page.reload()
+
+  await expect(page.getByTestId('player-name')).toBeVisible()
+  await expect(page.getByTestId('create-team')).toBeVisible()
+  await expect(page.getByTestId('team-code-value')).toHaveCount(0)
+})
+
+test('line selection supports the eight-line boundary when there is one carriage per line', async ({ page }) => {
+  const code = await createTeamAs(page, 'Boundary Tester')
+  await page.getByTestId('line-count-select').selectOption('8')
+
+  await expect(page.getByTestId('setup-total-parcels')).toContainText('8 parcels')
+  await expect(page.getByTestId('carriage-distribution')).toContainText('Line 1: 1 carriage')
+  await expect(page.getByTestId('carriage-distribution')).toContainText('Line 8: 1 carriage')
+
+  await page.getByTestId('start-round').click()
+  await expect(page.getByTestId('train-line-8')).toBeVisible()
+  expect(code).toMatch(/^[A-Z0-9]{8}$/)
+})
+
+test('a failed create request leaves the form usable and shows the server error', async ({ page }) => {
+  await page.route('**/api/teams', async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Storage temporarily unavailable' }),
+    })
+  })
+
+  await page.goto('/')
+  await page.getByTestId('player-name').fill('Offline Host')
+  await page.getByTestId('team-name').fill('Unavailable Crew')
+  await page.getByTestId('create-team').click()
+
+  await expect(page.getByText('Storage temporarily unavailable')).toBeVisible()
+  await expect(page.getByTestId('create-team')).toBeEnabled()
+  await expect(page.getByTestId('team-code-value')).toHaveCount(0)
+})
+
+// A phone-sized viewport makes every train longer than the screen, so these
+// cover the mobile-only horizontal scrolling of each line.
+test.describe('mobile horizontal train scrolling', () => {
+  test.use({ viewport: { width: 360, height: 740 } })
+
+  test('each train line scrolls horizontally and independently', async ({ page }) => {
+    await createTeamAs(page, 'Mobile Solo')
+    await page.getByTestId('line-count-select').selectOption('2')
+    await page.getByTestId('start-round').click()
+    await expect(page.getByTestId('train-line-1')).toBeVisible()
+    await expect(page.getByTestId('train-line-2')).toBeVisible()
+    await waitForTrainsSettled(page)
+
+    const lineOne = page.getByTestId('line-scroll-line-1')
+    const lineTwo = page.getByTestId('line-scroll-line-2')
+
+    // Wait until the arrival animation has cleared and each line is scrollable.
+    await expect(lineOne).toHaveClass(/is-scrollable/)
+    await expect(lineTwo).toHaveClass(/is-scrollable/)
+
+    // Both consists overflow their line container at this width.
+    for (const line of [lineOne, lineTwo]) {
+      const overflow = await line.evaluate(
+        (node) => node.scrollWidth - node.clientWidth,
+      )
+      expect(overflow).toBeGreaterThan(0)
+    }
+
+    // Scrolling one line does not move the other: they scroll independently.
+    await lineOne.evaluate((node) => {
+      node.scrollLeft = node.scrollWidth
+    })
+    await expect
+      .poll(() => lineOne.evaluate((node) => node.scrollLeft))
+      .toBeGreaterThan(0)
+    expect(await lineTwo.evaluate((node) => node.scrollLeft)).toBe(0)
+  })
+
+  test('dragging a parcel to a line edge scrolls its carriages horizontally', async ({ page }) => {
+    await createTeamAs(page, 'Mobile Dragger')
+    await page.getByTestId('line-count-select').selectOption('1')
+    await page.getByTestId('start-round').click()
+    await expect(page.getByTestId('carriage-line-1-carriage-1')).toBeVisible()
+    await waitForTrainsSettled(page)
+
+    const lineScroll = page.getByTestId('line-scroll-line-1')
+    await expect(lineScroll).toHaveClass(/is-scrollable/)
+    const overflow = await lineScroll.evaluate(
+      (node) => node.scrollWidth - node.clientWidth,
+    )
+    expect(overflow).toBeGreaterThan(0)
+
+    const parcel = page.getByTestId('parcel-parcel-1')
+    const parcelBox = await parcel.boundingBox()
+    const lineBox = await lineScroll.boundingBox()
+    const midY = lineBox.y + lineBox.height / 2
+
+    await page.mouse.move(
+      parcelBox.x + parcelBox.width / 2,
+      parcelBox.y + parcelBox.height / 2,
+    )
+    await page.mouse.down()
+    await page.mouse.move(
+      parcelBox.x + parcelBox.width / 2 + 8,
+      parcelBox.y + parcelBox.height / 2 + 8,
+    )
+    await expect(page.getByTestId('drag-overlay')).toBeVisible()
+
+    // Holding near the right edge scrolls the line's carriages into view.
+    await page.mouse.move(lineBox.x + lineBox.width - 6, midY, { steps: 6 })
+    await expect
+      .poll(() => lineScroll.evaluate((node) => node.scrollLeft), { timeout: 3000 })
+      .toBeGreaterThan(0)
+
+    const scrolledRight = await lineScroll.evaluate((node) => node.scrollLeft)
+
+    // Holding near the left edge scrolls them back.
+    await page.mouse.move(lineBox.x + 6, midY, { steps: 6 })
+    await expect
+      .poll(() => lineScroll.evaluate((node) => node.scrollLeft), { timeout: 3000 })
+      .toBeLessThan(scrolledRight)
+
+    await page.mouse.up()
+  })
+})
+
 

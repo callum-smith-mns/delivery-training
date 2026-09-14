@@ -18,7 +18,10 @@ function normalizeBasePath(value) {
 }
 
 export function createApiApp({ dbPath, basePath } = {}) {
-  const storage = new FileStorage(dbPath ?? 'api/data/teams.json')
+  const defaultDbPath = path.join(currentDir, 'data', 'teams.json')
+  const storage = new FileStorage(
+    dbPath ?? globalThis.process?.env.DB_PATH ?? defaultDbPath,
+  )
   const teamService = new TeamService({ storage })
   const mountPath = normalizeBasePath(basePath ?? process.env.BASE_PATH)
 
@@ -148,6 +151,23 @@ export function createApiApp({ dbPath, basePath } = {}) {
     try {
       const data = await storage.readData()
       response.json(data)
+    } catch (error) {
+      next(error)
+    }
+  })
+
+  router.get('/api/admin/overview', async (_request, response, next) => {
+    try {
+      response.json(await teamService.getAdminOverview())
+    } catch (error) {
+      next(error)
+    }
+  })
+
+  router.post('/api/admin/teams/:teamCode/cancel', async (request, response, next) => {
+    try {
+      const team = await teamService.closeOpenGame({ teamCode: request.params.teamCode })
+      response.json({ team })
     } catch (error) {
       next(error)
     }

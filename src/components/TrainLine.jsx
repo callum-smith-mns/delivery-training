@@ -1,9 +1,11 @@
-import React from 'react'
+// eslint-disable-next-line no-unused-vars
+import React, { useState } from 'react'
 import Carriage from './Carriage'
 import Locomotive from './Locomotive'
 
 function TrainLine({ view, onShipLine, onArrivalEnd }) {
   const { id, line, owned, departing, arriving, shipped, ready } = view
+  const [departureRemaining, setDepartureRemaining] = useState(null)
 
   // Until the previous player ships this train our way the rails stay empty.
   if (!owned && !departing) {
@@ -36,40 +38,64 @@ function TrainLine({ view, onShipLine, onArrivalEnd }) {
     .filter(Boolean)
     .join(' ')
   const canInteract = owned && !departing
+  // Each settled, owned line scrolls its carriages horizontally on its own so a
+  // train longer than the screen stays fully reachable. Off during the
+  // arrival/departure slide so those transforms play across the full viewport.
+  const scrollable = canInteract && !arriving
+
+  function handleShip() {
+    setDepartureRemaining(
+      Object.fromEntries(
+        line.carriages.map((carriage) => [
+          carriage.id,
+          carriage.requiredParcels - carriage.loadedParcelIds.length,
+        ]),
+      ),
+    )
+    onShipLine(id)
+  }
 
   return (
     <section className="train-line" aria-label={`Train line ${id}`}>
       <div
-        className={consistClass}
-        data-testid={`train-${id}`}
-        onAnimationEnd={() => {
-          if (arriving) {
-            onArrivalEnd(id)
-          }
-        }}
+        className={`train-scroll${scrollable ? ' is-scrollable' : ''}`}
+        data-testid={`line-scroll-${id}`}
+        {...(scrollable ? { 'data-line-scroll': '' } : {})}
       >
-        {line.carriages.map((carriage) => {
-          const acceptsDrop =
-            canInteract &&
-            carriage.loadedParcelIds.length < carriage.requiredParcels
+        <div
+          className={consistClass}
+          data-testid={`train-${id}`}
+          onAnimationEnd={() => {
+            if (arriving) {
+              onArrivalEnd(id)
+            }
+          }}
+        >
+          {line.carriages.map((carriage) => {
+            const acceptsDrop =
+              canInteract &&
+              carriage.loadedParcelIds.length < carriage.requiredParcels
 
-          return (
-            <Carriage
-              key={carriage.id}
-              lineId={id}
-              carriage={carriage}
-              loadedParcels={carriage.loadedParcelIds}
-              acceptsDrop={acceptsDrop}
-              canInteract={canInteract}
-            />
-          )
-        })}
-        <Locomotive
-          canShip={ready && canInteract}
-          onShip={() => onShipLine(id)}
-          lineId={id}
-          isCurrentPlayer={canInteract}
-        />
+            return (
+              <Carriage
+                key={carriage.id}
+                lineId={id}
+                carriage={carriage}
+                loadedParcels={carriage.loadedParcelIds}
+                acceptsDrop={acceptsDrop}
+                canInteract={canInteract}
+                departing={departing}
+                departureRemaining={departureRemaining?.[carriage.id]}
+              />
+            )
+          })}
+          <Locomotive
+            canShip={ready && canInteract}
+            onShip={handleShip}
+            lineId={id}
+            isCurrentPlayer={canInteract}
+          />
+        </div>
       </div>
       <div className="track" aria-hidden="true"></div>
     </section>

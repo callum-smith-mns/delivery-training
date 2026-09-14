@@ -10,11 +10,14 @@ import {
 } from '@dnd-kit/core'
 import {
   createTeam,
+  clearStoredSession,
   getTeam,
+  getStoredSession,
   joinTeam,
   playLine,
   restartGame,
   startGame,
+  storeSession,
 } from '../api/client'
 import Platform from './Platform'
 import { ParcelBox } from './Parcel'
@@ -24,6 +27,56 @@ import {
   distributeCarriagesAcrossLines,
   isLineReadyToShip,
 } from '../game/config'
+
+const EDGE_SCROLL_THRESHOLD = 80
+const MAX_EDGE_SCROLL_SPEED = 18
+
+export function getTeamUrl(teamCode) {
+  const url = new URL(window.location.href)
+  url.searchParams.set('team', teamCode)
+  return url.href
+}
+
+export function getEdgeScrollDelta(pointerY, viewportHeight) {
+  if (pointerY <= EDGE_SCROLL_THRESHOLD) {
+    return -Math.min(
+      MAX_EDGE_SCROLL_SPEED,
+      Math.max(1, EDGE_SCROLL_THRESHOLD - pointerY),
+    )
+  }
+
+  if (pointerY >= viewportHeight - EDGE_SCROLL_THRESHOLD) {
+    return Math.min(
+      MAX_EDGE_SCROLL_SPEED,
+      Math.max(1, pointerY - (viewportHeight - EDGE_SCROLL_THRESHOLD)),
+    )
+  }
+
+  return 0
+}
+
+// Scroll a line's carriages horizontally when the pointer nears its left/right
+// edge, so a parcel can be dragged onto carriages that sit off-screen.
+export function getHorizontalEdgeScrollDelta(pointerX, rectLeft, rectRight) {
+  const fromLeft = pointerX - rectLeft
+  const fromRight = rectRight - pointerX
+
+  if (fromLeft <= EDGE_SCROLL_THRESHOLD) {
+    return -Math.min(
+      MAX_EDGE_SCROLL_SPEED,
+      Math.max(1, EDGE_SCROLL_THRESHOLD - fromLeft),
+    )
+  }
+
+  if (fromRight <= EDGE_SCROLL_THRESHOLD) {
+    return Math.min(
+      MAX_EDGE_SCROLL_SPEED,
+      Math.max(1, EDGE_SCROLL_THRESHOLD - fromRight),
+    )
+  }
+
+  return 0
+}
 
 // Only carriages the parcel actually overlaps are eligible (so dropping over
 // empty space or a full/disabled carriage loads nothing), and among those the
@@ -64,6 +117,7 @@ function GameScene({
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [draggingParcel, setDraggingParcel] = useState(null)
+  const pointerRef = useRef(null)
   const [roundComplete, setRoundComplete] = useState(false)
   // Parcel loading is entirely local: nothing is sent to the server until a
   // line is shipped. Keyed by `${lineId}:${cycleCount}` so a player's fresh
@@ -99,6 +153,70 @@ function GameScene({
     setSelectedLineCount(defaultSelectedLineCount)
   }, [defaultSelectedLineCount])
 
+  useEffect(() => {
+    const storedSession = getStoredSession()
+    if (storedSession?.teamCode && storedSession?.playerId) {
+      setSession(storedSession)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!draggingParcel) {
+      pointerRef.current = null
+      return undefined
+    }
+
+    let animationFrameId
+
+    function scrollAtEdge() {
+      const pointer = pointerRef.current
+      if (pointer) {
+        const verticalDelta = getEdgeScrollDelta(pointer.y, window.innerHeight)
+        if (verticalDelta !== 0) {
+          window.scrollBy({ top: verticalDelta, behavior: 'auto' })
+        }
+
+        const scrollers = document.querySelectorAll('[data-line-scroll]')
+        scrollers.forEach((scroller) => {
+          if (scroller.scrollWidth <= scroller.clientWidth) {
+            return
+          }
+          const rect = scroller.getBoundingClientRect()
+          const overLine =
+            pointer.y >= rect.top &&
+            pointer.y <= rect.bottom &&
+            pointer.x >= rect.left &&
+            pointer.x <= rect.right
+          if (!overLine) {
+            return
+          }
+          const horizontalDelta = getHorizontalEdgeScrollDelta(
+            pointer.x,
+            rect.left,
+            rect.right,
+          )
+          if (horizontalDelta !== 0) {
+            scroller.scrollLeft += horizontalDelta
+          }
+        })
+      }
+      animationFrameId = window.requestAnimationFrame(scrollAtEdge)
+    }
+
+    function handlePointerMove(event) {
+      pointerRef.current = { x: event.clientX, y: event.clientY }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    animationFrameId = window.requestAnimationFrame(scrollAtEdge)
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.cancelAnimationFrame(animationFrameId)
+      pointerRef.current = null
+    }
+  }, [draggingParcel])
+
   const carriageDistribution = useMemo(() => {
     return distributeCarriagesAcrossLines(totalCarriages, selectedLineCount)
   }, [totalCarriages, selectedLineCount])
@@ -128,6 +246,9 @@ function GameScene({
           setTeam(payload.team)
         }
       } catch (requestError) {
+        clearStoredSession()
+        setSession(null)
+        setTeam(null)
         if (isAlive) {
           setError(requestError.message)
         }
@@ -277,9 +398,10 @@ function GameScene({
         playerId: payload.session.playerId,
         teamCode: payload.session.teamCode,
       })
+      storeSession(payload.session)
       commitTeam(payload.team)
       setJoinCode(payload.team.code)
-      window.history.replaceState({}, '', `/?team=${payload.team.code}`)
+      window.history.replaceState({}, '', getTeamUrl(payload.team.code))
     } catch (requestError) {
       setError(requestError.message)
     } finally {
@@ -311,8 +433,9 @@ function GameScene({
         playerId: payload.session.playerId,
         teamCode: payload.session.teamCode,
       })
+      storeSession(payload.session)
       commitTeam(payload.team)
-      window.history.replaceState({}, '', `/?team=${payload.session.teamCode}`)
+      window.history.replaceState({}, '', getTeamUrl(payload.session.teamCode))
     } catch (requestError) {
       setError(requestError.message)
     } finally {
@@ -575,7 +698,7 @@ function GameScene({
   }
 
   if (team.status === 'lobby') {
-    const shareLink = `${window.location.origin}/?team=${team.code}`
+    const shareLink = getTeamUrl(team.code)
 
     return (
       <main className="game-screen">

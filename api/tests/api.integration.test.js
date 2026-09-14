@@ -89,6 +89,23 @@ describe('Delivery API integration', () => {
       .expect(403)
   })
 
+  it('keeps team and player identity after the API process is recreated', async () => {
+    const created = await request(app)
+      .post('/api/teams')
+      .send({ name: 'Persistent Host', teamName: 'Persistent Crew' })
+      .expect(201)
+
+    const restartedApp = createApiApp({ dbPath })
+    const rejoined = await request(restartedApp)
+      .post('/api/teams/join')
+      .send({ teamCode: created.body.team.code, name: 'persistent host' })
+      .expect(200)
+
+    expect(rejoined.body.rejoined).toBe(true)
+    expect(rejoined.body.session.playerId).toBe(created.body.session.playerId)
+    expect(rejoined.body.team.players).toHaveLength(1)
+  })
+
   it('rejects team creation without a team name', async () => {
     const response = await request(app)
       .post('/api/teams')
@@ -216,6 +233,32 @@ describe('Delivery API integration', () => {
     const populated = await request(app).get('/api/data').expect(200)
     expect(populated.body.teams[teamCode]).toBeDefined()
     expect(populated.body.teams[teamCode].name).toBe('Report Crew')
+  })
+
+  it('exposes live admin overview and cancels an active session', async () => {
+    const created = await request(app)
+      .post('/api/teams')
+      .send({ name: 'Admin Target', teamName: 'Admin Crew' })
+      .expect(201)
+    const teamCode = created.body.team.code
+
+    await request(app)
+      .post(`/api/teams/${teamCode}/start`)
+      .send({ playerId: created.body.session.playerId, lineCount: 1 })
+      .expect(200)
+
+    const overview = await request(app).get('/api/admin/overview').expect(200)
+    expect(overview.body.counts.active).toBe(1)
+    expect(overview.body.teams[0].code).toBe(teamCode)
+
+    const cancelled = await request(app)
+      .post(`/api/admin/teams/${teamCode}/cancel`)
+      .expect(200)
+    expect(cancelled.body.team.status).toBe('lobby')
+    expect(cancelled.body.team.game).toBeNull()
+
+    const afterCancel = await request(app).get('/api/admin/overview').expect(200)
+    expect(afterCancel.body.counts).toMatchObject({ active: 0, lobby: 1 })
   })
 
   it('serves the static report page', async () => {

@@ -2,6 +2,7 @@
 // (e.g. in production). Empty default keeps same-origin/relative requests, which
 // the dev server proxy handles.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+const SESSION_STORAGE_KEY = 'delivery-training-session'
 
 async function request(path, { method = 'GET', body } = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -25,6 +26,22 @@ export function createTeam({ name, teamName, origin }) {
     method: 'POST',
     body: { name, teamName, origin },
   })
+}
+
+export function getStoredSession() {
+  try {
+    return JSON.parse(window.localStorage.getItem(SESSION_STORAGE_KEY) ?? 'null')
+  } catch {
+    return null
+  }
+}
+
+export function storeSession(session) {
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
+}
+
+export function clearStoredSession() {
+  window.localStorage.removeItem(SESSION_STORAGE_KEY)
 }
 
 export function joinTeam({ name, teamCode }) {
@@ -75,4 +92,12 @@ export function restartGame({ teamCode, playerId }) {
     method: 'POST',
     body: { playerId },
   })
+}
+
+export function getAdminOverview() {
+  return request('/api/admin/overview')
+}
+
+export function cancelTeam({ teamCode }) {
+  return request(`/api/admin/teams/${teamCode}/cancel`, { method: 'POST' })
 }

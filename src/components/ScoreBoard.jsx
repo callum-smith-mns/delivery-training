@@ -1,6 +1,12 @@
 import React from 'react'
 
+const SHOW_DELIVERY_SCORE = import.meta.env.VITE_SHOW_DELIVERY_SCORE === 'true'
+
 function ScoreBoard({ scoreEvents }) {
+  if (!SHOW_DELIVERY_SCORE) {
+    return null
+  }
+
   const totalShipped = scoreEvents.reduce(
     (sum, event) => sum + event.parcelsShipped,
     0,

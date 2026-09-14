@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React from 'react'
 import { useDroppable } from '@dnd-kit/core'
 
@@ -7,9 +8,12 @@ function Carriage({
   acceptsDrop,
   loadedParcels,
   canInteract,
+  departing,
+  departureRemaining,
 }) {
   const loadedCount = loadedParcels.length
   const remaining = carriage.requiredParcels - loadedCount
+  const displayedRemaining = departing ? departureRemaining ?? remaining : remaining
 
   const { isOver, setNodeRef } = useDroppable({
     id: carriage.id,
@@ -38,8 +42,12 @@ function Carriage({
       <div className="carriage-progress" data-testid={`progress-${carriage.id}`}>
         {loadedCount}/{carriage.requiredParcels}
       </div>
-      <p className="carriage-remaining">{remaining} parcels needed</p>
-      {!canInteract ? <p className="carriage-note">Waiting for active player</p> : null}
+      <p className="carriage-remaining">
+        {displayedRemaining} parcels needed
+      </p>
+      {!canInteract && !departing ? (
+        <p className="carriage-note">Waiting for active player</p>
+      ) : null}
       <div className="carriage-cargo" aria-hidden="true">
         {loadedParcels.map((parcelId) => (
           <span className="cargo-block" key={parcelId}></span>

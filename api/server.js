@@ -5,10 +5,10 @@ import { createApiApp } from './app.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const dbPath = path.join(__dirname, 'data', 'teams.json')
-const basePath = process.env.BASE_PATH
+const dbPath = globalThis.process?.env.DB_PATH ?? path.join(__dirname, 'data', 'teams.json')
+const basePath = globalThis.process?.env.BASE_PATH
 const app = createApiApp({ dbPath, basePath })
-const port = Number(process.env.PORT ?? 3001)
+const port = Number(globalThis.process?.env.PORT ?? 3001)
 
 app.listen(port, () => {
   // eslint-disable-next-line no-console

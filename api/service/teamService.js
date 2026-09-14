@@ -155,6 +155,21 @@ export class TeamService {
       throw error
     }
 
+    const existingPlayer = team.players.find(
+      (player) => player.name.toLowerCase() === cleanName.toLowerCase(),
+    )
+    if (existingPlayer) {
+      return {
+        team: buildPublicTeam(team),
+        session: {
+          playerId: existingPlayer.id,
+          teamCode: normalizedCode,
+          isHost: team.hostPlayerId === existingPlayer.id,
+        },
+        rejoined: true,
+      }
+    }
+
     if (team.status !== 'lobby') {
       const error = new Error('Team is already in an active game')
       error.statusCode = 409
@@ -191,6 +206,21 @@ export class TeamService {
     }
 
     return buildPublicTeam(team)
+  }
+
+  async getAdminOverview() {
+    const db = await this.storage.readData()
+    const teams = Object.values(db.teams).map((team) => buildPublicTeam(team))
+    const counts = teams.reduce(
+      (summary, team) => {
+        summary.total += 1
+        summary[team.status] = (summary[team.status] ?? 0) + 1
+        return summary
+      },
+      { total: 0, lobby: 0, active: 0, completed: 0 },
+    )
+
+    return { counts, teams }
   }
 
   async startGame({
@@ -474,6 +504,30 @@ export class TeamService {
     if (team.game) {
       team.games = team.games ?? []
       team.games.push(summarizeGame(team.game))
+    }
+
+    team.status = 'lobby'
+    team.game = null
+    team.startedAt = null
+
+    await this.storage.writeData(db)
+    return buildPublicTeam(team)
+  }
+
+  async closeOpenGame({ teamCode }) {
+    const normalizedCode = String(teamCode ?? '').trim().toUpperCase()
+    const db = await this.storage.readData()
+    const team = db.teams[normalizedCode]
+    if (!team) {
+      const error = new Error('Team not found')
+      error.statusCode = 404
+      throw error
+    }
+
+    if (team.status !== 'active' || !team.game) {
+      const error = new Error('Team does not have an open game')
+      error.statusCode = 409
+      throw error
     }
 
     team.status = 'lobby'

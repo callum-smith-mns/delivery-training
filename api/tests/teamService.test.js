@@ -36,6 +36,63 @@ describe('TeamService', () => {
     expect(joined.team.players).toHaveLength(2)
   })
 
+  it('rejoins the existing player instead of creating a duplicate', async () => {
+    const created = await service.createTeam({ playerName: 'Host', teamName: 'Crew' })
+
+    const firstJoin = await service.joinTeam({
+      teamCode: created.team.code,
+      playerName: 'Guest',
+    })
+    const secondJoin = await service.joinTeam({
+      teamCode: created.team.code,
+      playerName: ' guest ',
+    })
+
+    expect(secondJoin.rejoined).toBe(true)
+    expect(secondJoin.session.playerId).toBe(firstJoin.session.playerId)
+    expect(secondJoin.team.players).toHaveLength(2)
+  })
+
+  it('lets an existing player rejoin an active game', async () => {
+    const created = await service.createTeam({ playerName: 'Host', teamName: 'Crew' })
+    await service.startGame({
+      teamCode: created.team.code,
+      playerId: created.session.playerId,
+      lineCount: 1,
+      totalCarriages: 1,
+      parcelsPerCarriage: 1,
+    })
+
+    const rejoined = await service.joinTeam({
+      teamCode: created.team.code,
+      playerName: 'host',
+    })
+
+    expect(rejoined.rejoined).toBe(true)
+    expect(rejoined.session.playerId).toBe(created.session.playerId)
+  })
+
+  it('reports live team counts and statuses for admin views', async () => {
+    let randomIndex = 0
+    service.randomValue = () => ((randomIndex++ % 36) + 0.1) / 36
+    const lobby = await service.createTeam({ playerName: 'Lobby', teamName: 'Lobby Crew' })
+    const active = await service.createTeam({ playerName: 'Active', teamName: 'Active Crew' })
+    await service.startGame({
+      teamCode: active.team.code,
+      playerId: active.session.playerId,
+      lineCount: 1,
+      totalCarriages: 1,
+      parcelsPerCarriage: 1,
+    })
+
+    const overview = await service.getAdminOverview()
+
+    expect(overview.counts).toMatchObject({ total: 2, lobby: 1, active: 1 })
+    expect(overview.teams.map((team) => team.code)).toEqual(
+      expect.arrayContaining([lobby.team.code, active.team.code]),
+    )
+  })
+
   it('requires a team name when creating a team', async () => {
     await expect(
       service.createTeam({ playerName: 'Host' }),
@@ -244,5 +301,38 @@ describe('TeamService', () => {
     await expect(
       service.restartGame({ teamCode: created.team.code, playerId: soloId }),
     ).rejects.toThrow(/Finish the current game/)
+  })
+
+  it('closes an open game without archiving its unfinished data', async () => {
+    const created = await service.createTeam({ playerName: 'Solo', teamName: 'Crew' })
+    const soloId = created.session.playerId
+
+    await service.startGame({
+      teamCode: created.team.code,
+      playerId: soloId,
+      lineCount: 1,
+      totalCarriages: 1,
+      parcelsPerCarriage: 1,
+    })
+
+    const closed = await service.closeOpenGame({ teamCode: created.team.code })
+
+    expect(closed.status).toBe('lobby')
+    expect(closed.game).toBeNull()
+    expect(closed.games).toEqual([])
+    expect(closed.startedAt).toBeNull()
+    expect(closed.gameCount).toBe(1)
+  })
+
+  it('only closes an active game', async () => {
+    const created = await service.createTeam({ playerName: 'Solo', teamName: 'Crew' })
+
+    await expect(
+      service.closeOpenGame({ teamCode: created.team.code }),
+    ).rejects.toThrow(/does not have an open game/)
+
+    await expect(
+      service.closeOpenGame({ teamCode: 'MISSING1' }),
+    ).rejects.toThrow(/Team not found/)
   })
 })
