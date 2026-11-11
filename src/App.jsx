@@ -4,11 +4,13 @@ import LiveStatsPage from './components/LiveStatsPage'
 import './App.css'
 
 function App() {
-  if (window.location.pathname === '/admin') {
+  const page = window.location.pathname.replace(/\/+$/, '').split('/').pop()
+
+  if (page === 'admin') {
     return <LiveStatsPage admin />
   }
 
-  if (window.location.pathname === '/stats') {
+  if (page === 'stats') {
     return <LiveStatsPage />
   }
 

@@ -1,0 +1,9 @@
+RewriteEngine On
+
+# Keep relative asset URLs anchored to the deployment directory.
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(admin|stats)/$ $1 [R=302,L]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(admin|stats)$ index.html [L]

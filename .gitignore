@@ -29,3 +29,6 @@ test-results
 
 # API datastore
 api/data/teams.json
+
+# Distribution zips*
+Archive.zip

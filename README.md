@@ -53,6 +53,20 @@ building or running the frontend:
 VITE_SHOW_DELIVERY_SCORE=true npm run build
 ```
 
+## Apache deployment
+
+Build the UI with `npm run build` and upload the contents of `dist/`, including
+the hidden `.htaccess` file, to the site's document root or a subfolder. The build copies
+`public/.htaccess` automatically; it serves `index.html` for `/admin` and `/stats`
+without rewriting API requests or existing files and directories.
+
+Apache must have `mod_rewrite` enabled and allow these directives with
+`AllowOverride FileInfo` (or `AllowOverride All`) for the deployment directory.
+The UI recognizes `/admin` and `/stats` under the deployment folder, for example
+`/delivery-rails/admin`. Trailing slashes on these routes are redirected away so
+relative asset URLs resolve correctly. API hosting or reverse proxy configuration
+is separate; `VITE_API_BASE_URL` configures API requests, not UI routes.
+
 ## Testing
 
 Frontend unit tests:
